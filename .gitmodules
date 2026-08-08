@@ -1,0 +1,6 @@
+[submodule "Library/miniaudio"]
+	path = Library/miniaudio
+	url = https://github.com/mackron/miniaudio
+[submodule "Library/SDL"]
+	path = Library/SDL
+	url = https://github.com/libsdl-org/SDL
