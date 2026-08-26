@@ -17,18 +17,21 @@ endmacro()
 project(MusicBars LANGUAGES C)
 
 add_subdirectory("${MusicBars_SOURCE_DIR}/Library/miniaudio")
+set(SDL_STATIC ON)
+set(SDL_SHARED OFF)
 add_subdirectory("${MusicBars_SOURCE_DIR}/Library/SDL")
 
-if (CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
-	set(MINGW true)
-endif()
-
 set(MusicBars_HEADER_FILES
+	"${MusicBars_SOURCE_DIR}/Source/Atomic.h"
+	"${MusicBars_SOURCE_DIR}/Source/Common.h"
+	"${MusicBars_SOURCE_DIR}/Source/Machine.h"
 )
 set(MusicBars_SOURCE_FILES
+	"${MusicBars_SOURCE_DIR}/Source/MatrixMultCpu.c"
 	"${MusicBars_SOURCE_DIR}/Source/Main.c"
 )
 set(MusicBars_INCLUDE_DIRECTORIES
+	"${MusicBars_SOURCE_DIR}/Source"
 )
 if (MINGW)
 	list(APPEND MusicBars_HEADER_FILES
@@ -57,5 +60,9 @@ set_target_properties(MusicBars PROPERTIES
 	INTERPROCEDURAL_OPTIMIZATION TRUE
 	C_STANDARD 11
 )
+
+if (MSVC)
+    target_compile_options(MusicBars PRIVATE "/experimental:c11atomics")
+endif()
 
 set_build_dir_default(MusicBars)
