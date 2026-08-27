@@ -144,6 +144,22 @@ void* MatrixMultCpu_Init(
 void MatrixMultCpu_Compute(void* pStateIn, const float* aSample, float* aOutput);
 void MatrixMultCpu_Destroy(void* pStateIn);
 
+SDL_HitTestResult HitTestCallback(SDL_Window* Window, const SDL_Point* Point, void* Data) {
+	(void)Window;
+	(void)Data;
+
+	float MouseX;
+	float MouseY;
+	SDL_MouseButtonFlags ButtonFlag = SDL_GetGlobalMouseState(&MouseX, &MouseY);
+
+	if (ButtonFlag & SDL_BUTTON_RMASK) {
+		// TODO: Context menu here
+		return SDL_HITTEST_NORMAL;
+	}
+
+	return SDL_HITTEST_DRAGGABLE;
+}
+
 int main(int argc, char** argv) {
 
 	int Result = 0;
@@ -153,7 +169,7 @@ int main(int argc, char** argv) {
 	const size_t FreqMax = 250;
 	const size_t nBar = 80;
 	const size_t HistorySizeMs = 160;
-	const double fSensitivity = 40.0;
+	const double fSensitivity = 32.0;
 
 	const size_t BarGap = 5;
 	const size_t BarWidth = 10;
@@ -163,7 +179,7 @@ int main(int argc, char** argv) {
 	// Create SDL window
 
 	if (!SDL_Init(SDL_INIT_VIDEO)) {
-		fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+		fprintf(stderr, "Unable to initialize SDL: %s\n", SDL_GetError());
 		Result = -1;
 		goto End;
 	}
@@ -174,9 +190,12 @@ int main(int argc, char** argv) {
 		SDL_WINDOW_TRANSPARENT | SDL_WINDOW_BORDERLESS
 	);
 	if (!pWindow) {
-		fprintf(stderr, "SDL_CreateWindow failed: %s", SDL_GetError());
+		fprintf(stderr, "Unable to create the window: %s", SDL_GetError());
 		Result = -1;
 		goto CleanupSdl;
+	}
+	if (!SDL_SetWindowHitTest(pWindow, HitTestCallback, NULL)) {
+		fprintf(stderr, "Unable to set window hit test callback: %s", SDL_GetError());
 	}
 
 	// Create renderer
@@ -199,7 +218,7 @@ int main(int argc, char** argv) {
 
 	const double fFreqMin = (double)FreqMin;
 	const double fFreqMax = (double)FreqMax;
-	const size_t SampleRate = 48000;//FreqMax * 12 / 5; // TODO: Clamp to avoid upsampling
+	const size_t SampleRate = FreqMax * 12 / 5; // TODO: Clamp to avoid upsampling
 	const double fSampleRate = (double)SampleRate;
 	const size_t HistorySize = div_roundup(HistorySizeMs * SampleRate, 1000);
 	const double fHistorySize = (double)HistorySize;
@@ -269,21 +288,23 @@ int main(int argc, char** argv) {
 	MiniAudioConfig.sampleRate = SampleRate;
 	MiniAudioConfig.dataCallback = ReceiveAudio;
 	MiniAudioConfig.pUserData = &Queue;
+	MiniAudioConfig.noFixedSizedCallback = true;
 
-	ma_device device;
-	if (ma_device_init(NULL, &MiniAudioConfig, &device) != MA_SUCCESS) {
+	ma_device AudioDevice;
+	if (ma_device_init(NULL, &MiniAudioConfig, &AudioDevice) != MA_SUCCESS) {
 		fprintf(stderr, "Unable to initialize audio device.\n");
 		Result = -1;
 		goto CleanupAudioQueue;
 	}
 
-	if (ma_device_start(&device) != MA_SUCCESS) {
+	if (ma_device_start(&AudioDevice) != MA_SUCCESS) {
 		fprintf(stderr, "Unable to start audio device.\n");
 		Result = -1;
 		goto CleanupAudioDevice;
 	}
 
 	// Render thread
+
 	size_t nSampleCollected = 0;
 	size_t iTemp = 0;
 	while (true) {
@@ -319,8 +340,10 @@ int main(int argc, char** argv) {
 
 		MatrixMultCpu_Compute(pMatrixMultState, aSample, aOutputHeight);
 		// Normalize
-		for (size_t i = 0; i < nBar; ++i)
+		for (size_t i = 0; i < nBar; ++i) {
 			aOutputHeight[i] = (double)aOutputHeight[i] * gfDftWindowNorm * fSensitivity;
+			aOutputHeight[i] = (aOutputHeight[i] > 1.0) ? 1.0 : aOutputHeight[i];
+		}
 
 		// Render
 
@@ -331,7 +354,7 @@ int main(int argc, char** argv) {
 	// Cleanup
 
 	CleanupAudioDevice:
-	ma_device_uninit(&device);
+	ma_device_uninit(&AudioDevice);
 
 	CleanupAudioQueue:
 	AudioQueue_Destroy(&Queue);

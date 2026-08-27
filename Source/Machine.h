@@ -81,3 +81,74 @@
 #endif
 
 #define MACHINE_LLSC_ATOMICS (MACHINE_ARM32 || (MACHINE_ARM64 && !MACHINE_ARM64_ATOMICS))
+
+#if COMPILER_GCC
+	#if defined(__FMA__)
+		#define COMPILER_HAS_FMA3 1
+	#endif
+	#if defined(__AVX2__)
+		#define COMPILER_HAS_AVX2 1
+	#endif
+	#if defined(__AVX__)
+		#define COMPILER_HAS_AVX 1
+	#endif
+	#if defined(__SSE4_2__)
+		#define COMPILER_HAS_SSE4_2 1
+	#endif
+	#if defined(__SSE4_1__)
+		#define COMPILER_HAS_SSE4_1 1
+	#endif
+	#if defined(__SSSE3__)
+		#define COMPILER_HAS_SSSE3 1
+	#endif
+	#if defined(__SSE3__)
+		#define COMPILER_HAS_SSE3 1
+	#endif
+	#if defined(__SSE2__) || defined(__x86_64__)
+		#define COMPILER_HAS_SSE2 1
+	#endif
+	#if defined(__SSE__) || defined(__x86_64__)
+		#define COMPILER_HAS_SSE 1
+	#endif
+
+#elif COMPILER_MSVC
+
+	#if MACHINE_AMD64
+		#define COMPILER_HAS_SSE 1
+		#define COMPILER_HAS_SSE2 1
+	#endif
+
+	#if defined(_M_IX86_FP)
+		#if _M_IX86_FP >= 1
+			#define COMPILER_HAS_SSE 1
+		#endif
+		#if _M_IX86_FP >= 2
+			#define COMPILER_HAS_SSE2 1
+		#endif
+	#endif
+
+	#if defined(__AVX__)
+		#define COMPILER_HAS_SSE3 1
+		#define COMPILER_HAS_SSSE3 1
+		#define COMPILER_HAS_SSE4_1 1
+		#define COMPILER_HAS_SSE4_2 1
+		#define COMPILER_HAS_AVX 1
+	#endif
+
+	#if defined(__AVX2__)
+		#define COMPILER_HAS_AVX2 1
+		#define COMPILER_HAS_FMA3 1
+	#endif
+
+#endif
+
+#define COMPILER_HAS_NEON (defined(__ARM_NEON__) || defined(__ARM_NEON))
+#define COMPILER_HAS_ARM_FMA ((MACHINE_ARM32 || MACHINE_ARM64) && defined(__ARM_FEATURE_FMA))
+
+#ifdef _WIN32
+#define OS_WINDOWS 1
+#endif
+
+#ifdef __unix__
+#define OS_UNIX 1
+#endif

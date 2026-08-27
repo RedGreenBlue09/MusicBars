@@ -47,6 +47,7 @@ void* RenderCpu_Init(
 	SDL_SetRenderVSync(pRenderer, true);
 	pState->pRenderer = pRenderer;
 	
+	// FIXME: Unused
 	SDL_Texture* pTexture = SDL_CreateTexture(
 		pRenderer,
 		SDL_PIXELFORMAT_RGBA8888,
@@ -79,12 +80,11 @@ void RenderCpu_Render(void* pStateIn, const float* aOutput) {
 	SDL_SetRenderDrawColor(pState->pRenderer, 0, 0, 0, 0);
 	SDL_RenderClear(pState->pRenderer);
 	for (size_t i = 0; i < pState->nBar; ++i) {
-		const float BarHeight = aOutput[i] * (float)pState->WindowH;
-		const float BarX = (float)(i * (pState->BarWidth + pState->BarGap));
-		const float BarY = (float)pState->WindowH - BarHeight;
+		float BarHeight = aOutput[i] * (float)pState->WindowH;
+		BarHeight = fmaxf(BarHeight, 1.0f);
 		pState->pRects[i] = (SDL_FRect){
-			.x = BarX,
-			.y = BarY,
+			.x = (float)(i * (pState->BarWidth + pState->BarGap)),
+			.y = (float)pState->WindowH - BarHeight,
 			.w = (float)pState->BarWidth,
 			.h = BarHeight
 		};
