@@ -89,18 +89,33 @@ static void ReceiveAudio(ma_device* pDevice, void* pOutput, const void* pInput, 
 static const double gfPi = 0x1.921FB54442D18p1;
 
 static inline double DftWindow(double X) {
-	// Sinc window
+	// Rectangular window
+	//return 1.0;
+	
+	// Parabolic window (norm = 2 / 3)
+	//return -4.0 * X * X + 4.0 * X;
+	
+	// Sine window (norm = 2 / pi)
+	return sin(gfPi * X);
+	
+	// Sinc window (norm = Si(pi) / pi)
+	/*
 	X = 2.0 * X - 1.0;
 	if (X == 0.0)
 		return 1.0;
 	else
 		return sin(gfPi * X) / (gfPi * X);
-	// Welch
-	//return -4.0 * X * X + 4.0 * X;
+	*/
+
+	// Hann window (norm = 0.5)
+	/*
+	double Result = sin(gfPi * X);
+	return Result * Result;
+	*/
 }
 
 // Normalizing factor: Integral from 0 to 1 of the window.
-static const double gfDftWindowNorm = 0x1.2DD19DD527867p-1; // Si(pi) / pi
+static const double gfDftWindowNorm = 2.0 / 0x1.921FB54442D18p1;//0x1.2DD19DD527867p-1;
 
 void* RenderCpu_Init(
 	SDL_Window* pWindow,
@@ -137,7 +152,7 @@ int main(int argc, char** argv) {
 	const size_t FreqMin = 25;
 	const size_t FreqMax = 250;
 	const size_t nBar = 80;
-	const size_t HistorySizeMs = 200;
+	const size_t HistorySizeMs = 160;
 	const double fSensitivity = 40.0;
 
 	const size_t BarGap = 5;
@@ -184,7 +199,7 @@ int main(int argc, char** argv) {
 
 	const double fFreqMin = (double)FreqMin;
 	const double fFreqMax = (double)FreqMax;
-	const size_t SampleRate = FreqMax * 12 / 5; // TODO: Clamp to avoid upsampling
+	const size_t SampleRate = 48000;//FreqMax * 12 / 5; // TODO: Clamp to avoid upsampling
 	const double fSampleRate = (double)SampleRate;
 	const size_t HistorySize = div_roundup(HistorySizeMs * SampleRate, 1000);
 	const double fHistorySize = (double)HistorySize;
@@ -272,6 +287,14 @@ int main(int argc, char** argv) {
 	size_t nSampleCollected = 0;
 	size_t iTemp = 0;
 	while (true) {
+		SDL_Event Event;
+		while (SDL_PollEvent(&Event)) {
+			if (Event.type == SDL_EVENT_QUIT)
+				goto RenderEnd;
+			if (Event.type == SDL_EVENT_KEY_DOWN && Event.key.key == SDLK_ESCAPE)
+				goto RenderEnd;
+		}
+
 		// Add the newest samples to aSampleTemp
 
 		float fSample;
@@ -285,12 +308,12 @@ int main(int argc, char** argv) {
 			continue;
 		}
 
-		// Rotate the buffer
+		// Rotate the buffer & normalize before matrix mult
 
 		for (size_t i = iTemp; i < HistorySize; ++i)
-			aSample[i - iTemp] = aSampleTemp[i];
+			aSample[i - iTemp] = aSampleTemp[i] / fHistorySize;
 		for (size_t i = 0; i < iTemp; ++i)
-			aSample[HistorySize - iTemp + i] = aSampleTemp[i];
+			aSample[HistorySize - iTemp + i] = aSampleTemp[i] / fHistorySize;
 
 		// Matrix multiplication
 
@@ -303,6 +326,7 @@ int main(int argc, char** argv) {
 
 		RenderCpu_Render(pRenderState, aOutputHeight);
 	}
+	RenderEnd:
 
 	// Cleanup
 

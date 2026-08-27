@@ -32,14 +32,13 @@ void* MatrixMultCpu_Init(
 void MatrixMultCpu_Compute(void* pStateIn, const float* aSample, float* aOutput) {
 	// TODO: AVX2
 	matrix_mult_cpu_state* pState = (matrix_mult_cpu_state*)pStateIn;
-	float Norm = 1.0f / (float)pState->HistorySize;
 	for (size_t i = 0; i < pState->nBar; ++i) {
 		// For consitency with GPU, use single-precision accumulators.
 		float ResultCos = 0.0f;
 		float ResultSin = 0.0f;
 		for (size_t ii = 0; ii < pState->HistorySize; ++ii) {
-			ResultCos += aSample[ii] * Norm * pState->DftMatrixCos[i * pState->HistorySize + ii];
-			ResultSin += aSample[ii] * Norm * pState->DftMatrixSin[i * pState->HistorySize + ii];
+			ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->HistorySize + ii];
+			ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->HistorySize + ii];
 		}
 		aOutput[i] = sqrtf(ResultCos * ResultCos + ResultSin * ResultSin);
 	}

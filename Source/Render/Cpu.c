@@ -18,6 +18,7 @@ typedef struct {
 	size_t BarGap;
 	SDL_Renderer* pRenderer;
 	SDL_Texture* pTexture;
+	SDL_FRect* pRects;
 } render_cpu_state;
 
 void* RenderCpu_Init(
@@ -60,7 +61,16 @@ void* RenderCpu_Init(
 	}
 	SDL_SetTextureBlendMode(pTexture, SDL_BLENDMODE_BLEND);
 	pState->pTexture = pTexture;
-	
+
+	SDL_FRect* pRects = malloc(nBar * sizeof(SDL_FRect));
+	if (pRects == NULL) {
+		SDL_DestroyTexture(pTexture);
+		SDL_DestroyRenderer(pRenderer);
+		free(pState);
+		return NULL;
+	}
+	pState->pRects = pRects;
+
 	return pState;
 }
 
@@ -72,20 +82,21 @@ void RenderCpu_Render(void* pStateIn, const float* aOutput) {
 		const float BarHeight = aOutput[i] * (float)pState->WindowH;
 		const float BarX = (float)(i * (pState->BarWidth + pState->BarGap));
 		const float BarY = (float)pState->WindowH - BarHeight;
-		SDL_FRect Rect = {
+		pState->pRects[i] = (SDL_FRect){
 			.x = BarX,
 			.y = BarY,
 			.w = (float)pState->BarWidth,
 			.h = BarHeight
 		};
-		SDL_SetRenderDrawColor(pState->pRenderer, 255, 255, 255, 255);
-		SDL_RenderFillRect(pState->pRenderer, &Rect);
 	}
+	SDL_SetRenderDrawColor(pState->pRenderer, 255, 255, 255, 255);
+	SDL_RenderFillRects(pState->pRenderer, pState->pRects, (int)pState->nBar);
 	SDL_RenderPresent(pState->pRenderer);
 }
 
 void RenderCpu_Destroy(void* pStateIn) {
 	render_cpu_state* pState = (render_cpu_state*)pStateIn;
+	free(pState->pRects);
 	SDL_DestroyTexture(pState->pTexture);
 	SDL_DestroyRenderer(pState->pRenderer);
 	free(pState);

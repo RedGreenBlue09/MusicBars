@@ -19,7 +19,13 @@ project(MusicBars LANGUAGES C)
 add_subdirectory("${MusicBars_SOURCE_DIR}/Library/miniaudio")
 set(SDL_STATIC ON)
 set(SDL_SHARED OFF)
+set_target_properties(miniaudio PROPERTIES
+	INTERPROCEDURAL_OPTIMIZATION TRUE
+)
 add_subdirectory("${MusicBars_SOURCE_DIR}/Library/SDL")
+set_target_properties(SDL3-static PROPERTIES
+	INTERPROCEDURAL_OPTIMIZATION TRUE
+)
 
 set(MusicBars_HEADER_FILES
 	"${MusicBars_SOURCE_DIR}/Source/Atomic.h"
@@ -55,7 +61,7 @@ target_include_directories(MusicBars PRIVATE
 )
 target_link_libraries(MusicBars
 	PRIVATE miniaudio
-	PRIVATE SDL3::SDL3
+	PRIVATE SDL3-static
 )
 set_target_properties(MusicBars PROPERTIES
 	INTERPROCEDURAL_OPTIMIZATION TRUE
