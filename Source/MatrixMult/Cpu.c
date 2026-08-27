@@ -8,20 +8,33 @@
 #include <Machine.h>
 
 #if COMPILER_HAS_SSE
+
 #include <immintrin.h>
+
 	#if COMPILER_MSVC
+
 #include <intrin.h>
+
 	#elif COMPILER_GCC
+
 #include <cpuid.h>
 #include <x86intrin.h>
+
 	#endif
+
+#elif COMPILER_HAS_NEON
+
+#include <arm_neon.h>
+
 #endif
 
 #if OS_WINDOWS
+
 #include <Windows.h>
+
 #endif
 
-// TODO: Prevent autovectorization of scalar code
+// TODO: Separate into files to prevent autovectorization of scalar code
 
 typedef struct {
 	size_t HistorySize;
@@ -30,33 +43,37 @@ typedef struct {
 	float* DftMatrixSin;
 
 	// Runtime detection flags
-#if (MACHINE_X86 || MACHINE_AMD64)
 
-	#if COMPILER_HAS_SSE
+#if COMPILER_HAS_SSE
+
 	bool bUseSse;
-	#endif
 
-	#if COMPILER_HAS_AVX
+#endif
+
+#if COMPILER_HAS_AVX
+
 	bool bUseAvx;
-	#endif
 
-	#if COMPILER_HAS_FMA3
+#endif
+
+#if COMPILER_HAS_FMA3
+
 	bool bUseFma3;
-	#endif
 
-#elif MACHINE_ARM
+#endif
 
-	#if COMPILER_HAS_NEON
+#if COMPILER_HAS_NEON
 
 	bool bUseNeon;
 
-		#if COMPILER_HAS_ARM_FMA
+	#if COMPILER_HAS_ARM_FMA
+
 	bool bUseNeonFma;
-		#endif
 
 	#endif
 
 #endif
+
 } matrix_mult_cpu_state;
 
 void* MatrixMultCpu_Init(
@@ -96,7 +113,7 @@ void* MatrixMultCpu_Init(
 
 	#if OS_WINDOWS
 
-	pState->bUseNeon = true; // Win NT requires NEON for all ARM CPUs.
+	pState->bUseNeon = true; // Windows NT requires NEON for all ARM CPUs.
 
 	#elif OS_LINUX
 
@@ -155,6 +172,15 @@ float AvxReduceAdd(__m256 v) {
 }
 
 	#endif
+
+#endif
+
+#if COMPILER_HAS_NEON
+
+static inline float NeonReduceAdd(float32x4_t v) {
+	float32x2_t v2 = vadd_f32(vget_low_f32(v), vget_high_f32(v));
+	return vget_lane_f32(vpadd_f32(v2, v2), 0);
+}
 
 #endif
 
@@ -239,7 +265,53 @@ void MatrixMultCpu_Compute(void* pStateIn, const float* aSample, float* aOutput)
 
 #elif COMPILER_HAS_NEON
 
-	// TODO
+	#if COMPILER_HAS_ARM_FMA
+
+	if (pState->bUseNeonFma) {
+		for (size_t i = 0; i < pState->nBar; ++i) {
+			float32x4_t vResultCos = vdupq_n_f32(0.0f);
+			float32x4_t vResultSin = vdupq_n_f32(0.0f);
+			for (size_t ii = 0; ii < pState->HistorySize / 4 * 4; ii += 4) {
+				float32x4_t vSample = vld1q_f32(&aSample[ii]);
+				float32x4_t vCos = vld1q_f32(&pState->DftMatrixCos[i * pState->HistorySize + ii]);
+				float32x4_t vSin = vld1q_f32(&pState->DftMatrixSin[i * pState->HistorySize + ii]);
+				vResultCos = vfmaq_f32(vResultCos, vSample, vCos);
+				vResultSin = vfmaq_f32(vResultSin, vSample, vSin);
+			}
+			float ResultCos = NeonReduceAdd(vResultCos);
+			float ResultSin = NeonReduceAdd(vResultSin);
+			for (size_t ii = pState->HistorySize / 4 * 4; ii < pState->HistorySize; ++ii) {
+				ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->HistorySize + ii];
+				ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->HistorySize + ii];
+			}
+			aOutput[i] = sqrtf(ResultCos * ResultCos + ResultSin * ResultSin);
+		}
+		return;
+	}
+
+	#endif
+
+	if (pState->bUseNeon) {
+		for (size_t i = 0; i < pState->nBar; ++i) {
+			float32x4_t vResultCos = vdupq_n_f32(0.0f);
+			float32x4_t vResultSin = vdupq_n_f32(0.0f);
+			for (size_t ii = 0; ii < pState->HistorySize / 4 * 4; ii += 4) {
+				float32x4_t vSample = vld1q_f32(&aSample[ii]);
+				float32x4_t vCos = vld1q_f32(&pState->DftMatrixCos[i * pState->HistorySize + ii]);
+				float32x4_t vSin = vld1q_f32(&pState->DftMatrixSin[i * pState->HistorySize + ii]);
+				vResultCos = vaddq_f32(vResultCos, vmulq_f32(vSample, vCos));
+				vResultSin = vaddq_f32(vResultSin, vmulq_f32(vSample, vSin));
+			}
+			float ResultCos = NeonReduceAdd(vResultCos);
+			float ResultSin = NeonReduceAdd(vResultSin);
+			for (size_t ii = pState->HistorySize / 4 * 4; ii < pState->HistorySize; ++ii) {
+				ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->HistorySize + ii];
+				ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->HistorySize + ii];
+			}
+			aOutput[i] = sqrtf(ResultCos * ResultCos + ResultSin * ResultSin);
+		}
+		return;
+	}
 
 #endif
 

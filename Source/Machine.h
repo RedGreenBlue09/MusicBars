@@ -142,8 +142,13 @@
 
 #endif
 
-#define COMPILER_HAS_NEON (defined(__ARM_NEON__) || defined(__ARM_NEON))
-#define COMPILER_HAS_ARM_FMA ((MACHINE_ARM32 || MACHINE_ARM64) && defined(__ARM_FEATURE_FMA))
+#if defined(__ARM_NEON__) || defined(__ARM_NEON)
+#define COMPILER_HAS_NEON 1
+#endif
+
+#if defined(__ARM_FEATURE_FMA)
+#define COMPILER_HAS_ARM_FMA 1
+#endif
 
 #ifdef _WIN32
 #define OS_WINDOWS 1

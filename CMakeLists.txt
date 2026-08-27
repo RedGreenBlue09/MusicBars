@@ -71,5 +71,8 @@ set_target_properties(MusicBars PROPERTIES
 if (MSVC)
     target_compile_options(MusicBars PRIVATE "/experimental:c11atomics")
 endif()
+if (MINGW)
+	target_link_options(MusicBars PRIVATE -Wl,--pdb=)
+endif()
 
 set_build_dir_default(MusicBars)
