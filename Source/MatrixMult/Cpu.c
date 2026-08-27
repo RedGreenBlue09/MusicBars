@@ -13,7 +13,12 @@ typedef struct {
 	float* DftMatrixSin;
 } matrix_mult_cpu_state;
 
-void* MatrixMultCpu_Init(size_t HistorySize, size_t nBar, float* DftMatrixCos, float* DftMatrixSin) {
+void* MatrixMultCpu_Init(
+	size_t HistorySize,
+	size_t nBar,
+	float* DftMatrixCos,
+	float* DftMatrixSin
+) {
 	matrix_mult_cpu_state* pState = malloc(sizeof(matrix_mult_cpu_state));
 	if (pState == NULL)
 		return NULL;
@@ -27,15 +32,16 @@ void* MatrixMultCpu_Init(size_t HistorySize, size_t nBar, float* DftMatrixCos, f
 void MatrixMultCpu_Compute(void* pStateIn, const float* aSample, float* aOutput) {
 	// TODO: AVX2
 	matrix_mult_cpu_state* pState = (matrix_mult_cpu_state*)pStateIn;
+	float Norm = 1.0f / (float)pState->HistorySize;
 	for (size_t i = 0; i < pState->nBar; ++i) {
 		// For consitency with GPU, use single-precision accumulators.
-		float ResultCosBar = 0.0;
-		float ResultSinBar = 0.0;
+		float ResultCos = 0.0f;
+		float ResultSin = 0.0f;
 		for (size_t ii = 0; ii < pState->HistorySize; ++ii) {
-			ResultCosBar += aSample[ii] * pState->DftMatrixCos[i * pState->HistorySize + ii];
-			ResultSinBar += aSample[ii] * pState->DftMatrixSin[i * pState->HistorySize + ii];
+			ResultCos += aSample[ii] * Norm * pState->DftMatrixCos[i * pState->HistorySize + ii];
+			ResultSin += aSample[ii] * Norm * pState->DftMatrixSin[i * pState->HistorySize + ii];
 		}
-		aOutput[i] = sqrtf(ResultCosBar * ResultCosBar + ResultSinBar * ResultSinBar);
+		aOutput[i] = sqrtf(ResultCos * ResultCos + ResultSin * ResultSin);
 	}
 }
 

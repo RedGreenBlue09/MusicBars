@@ -27,8 +27,9 @@ set(MusicBars_HEADER_FILES
 	"${MusicBars_SOURCE_DIR}/Source/Machine.h"
 )
 set(MusicBars_SOURCE_FILES
-	"${MusicBars_SOURCE_DIR}/Source/MatrixMultCpu.c"
+	"${MusicBars_SOURCE_DIR}/Source/MatrixMult/Cpu.c"
 	"${MusicBars_SOURCE_DIR}/Source/Main.c"
+	"${MusicBars_SOURCE_DIR}/Source/Render/Cpu.c"
 )
 set(MusicBars_INCLUDE_DIRECTORIES
 	"${MusicBars_SOURCE_DIR}/Source"
