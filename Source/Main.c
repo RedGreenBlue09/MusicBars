@@ -337,14 +337,16 @@ int main(int argc, char** argv) {
 	MiniAudioConfig.noFixedSizedCallback = true;
 
 	ma_device AudioDevice;
-	if (ma_device_init(NULL, &MiniAudioConfig, &AudioDevice) != MA_SUCCESS) {
-		fprintf(stderr, "Unable to initialize audio device.\n");
+	ma_result MiniAudioResult = ma_device_init(NULL, &MiniAudioConfig, &AudioDevice);
+	if (MiniAudioResult != MA_SUCCESS) {
+		fprintf(stderr, "Unable to initialize audio device. Error code: %i\n", MiniAudioResult);
 		Result = -1;
 		goto CleanupAudioQueue;
 	}
 
-	if (ma_device_start(&AudioDevice) != MA_SUCCESS) {
-		fprintf(stderr, "Unable to start audio device.\n");
+	MiniAudioResult = ma_device_start(&AudioDevice);
+	if (MiniAudioResult != MA_SUCCESS) {
+		fprintf(stderr, "Unable to start audio device. Error code: %i\n", MiniAudioResult);
 		Result = -1;
 		goto CleanupAudioDevice;
 	}
