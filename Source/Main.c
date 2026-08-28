@@ -77,6 +77,7 @@ static bool AudioQueue_TryPop(audio_queue* pQueue, float* pSample) {
 static void ReceiveAudio(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 nFrame) {
 	const float* aInputSample = (const float*)pInput;
 	audio_queue* pQueue = (audio_queue*)pDevice->pUserData;
+	static bool b = true;
 	for (ma_uint32 i = 0; i < nFrame; i++) {
 		if (!AudioQueue_TryPush(pQueue, aInputSample[i])) {
 			// Drop in bulk so that the output has a clear cut off
@@ -117,16 +118,36 @@ static inline double DftWindow(double X) {
 // Normalizing factor: Integral from 0 to 1 of the window.
 static const double gfDftWindowNorm = 2.0 / 0x1.921FB54442D18p1;//0x1.2DD19DD527867p-1;
 
-void* RenderCpu_Init(
+typedef enum {
+	RendererId_Legacy,
+	RendererId_Modern
+} renderer_id;
+
+void* RenderLegacy_Init(
 	SDL_Window* pWindow,
 	size_t WindowW,
 	size_t WindowH,
 	size_t nBar,
 	size_t BarWidth,
-	size_t BarGap
+	size_t BarGap,
+	uint32_t BackgroundColor,
+	uint32_t BarColor
 );
-void RenderCpu_Render(void* pStateIn, const float* aOutput);
-void RenderCpu_Destroy(void* pStateIn);
+void RenderLegacy_Render(void* pStateIn, const float* aOutput);
+void RenderLegacy_Destroy(void* pStateIn);
+
+void* RenderModern_Init(
+	SDL_Window* pWindow,
+	size_t WindowW,
+	size_t WindowH,
+	size_t nBar,
+	size_t BarWidth,
+	size_t BarGap,
+	uint32_t BackgroundColor,
+	uint32_t BarColor
+);
+void RenderModern_Render(void* pStateIn, const float* aOutput);
+void RenderModern_Destroy(void* pStateIn);
 
 void* MatrixMultCpu_Init(
 	size_t HistorySize,
@@ -169,12 +190,14 @@ int main(int argc, char** argv) {
 	const size_t FreqMax = 250;
 	const size_t nBar = 80;
 	const size_t HistorySizeMs = 160;
-	const double fSensitivity = 32.0;
+	const double fSensitivity = 16.0;
 
 	const size_t BarGap = 5;
 	const size_t BarWidth = 10;
 	const size_t WindowW = nBar * BarWidth + (nBar - 1) * BarGap;
 	const size_t WindowH = 400;
+	const uint32_t BackgroundColor = 0x00000000;
+	const uint32_t BarColor = 0xFFFFFFFF;
 
 	// Create SDL window
 
@@ -188,7 +211,7 @@ int main(int argc, char** argv) {
 		(int)WindowW,
 		(int)WindowH,
 		SDL_WINDOW_TRANSPARENT | SDL_WINDOW_BORDERLESS
-	);
+	); // DX12 GPU renderer does not work with TRANSPARENT yet. Waiting on SDL...
 	if (!pWindow) {
 		fprintf(stderr, "Unable to create the window: %s", SDL_GetError());
 		Result = -1;
@@ -199,26 +222,49 @@ int main(int argc, char** argv) {
 	}
 
 	// Create renderer
+	void* pRenderState;
+	renderer_id RendererId;
+	do {
+		pRenderState = RenderModern_Init(
+			pWindow,
+			WindowW,
+			WindowH,
+			nBar,
+			BarWidth,
+			BarGap,
+			BackgroundColor,
+			BarColor
+		);
+		if (pRenderState != NULL) {
+			RendererId = RendererId_Modern;
+			break;
+		}
 
-	void* pRenderState = RenderCpu_Init(
-		pWindow,
-		WindowW,
-		WindowH,
-		nBar,
-		BarWidth,
-		BarGap
-	);
-	if (pRenderState == NULL) {
+		pRenderState = RenderLegacy_Init(
+			pWindow,
+			WindowW,
+			WindowH,
+			nBar,
+			BarWidth,
+			BarGap,
+			BackgroundColor,
+			BarColor
+		);
+		if (pRenderState != NULL) {
+			RendererId = RendererId_Legacy;
+			break;
+		}
+
 		fprintf(stderr, "Unable to create the renderer.\n");
 		Result = -1;
 		goto CleanupWindow;
-	}
+	} while (false);
 
 	// Build the DFT matrix
 
 	const double fFreqMin = (double)FreqMin;
 	const double fFreqMax = (double)FreqMax;
-	const size_t SampleRate = FreqMax * 12 / 5; // TODO: Clamp to avoid upsampling
+	const size_t SampleRate = 48000;//FreqMax * 12 / 5; // TODO: Clamp to avoid upsampling
 	const double fSampleRate = (double)SampleRate;
 	const size_t HistorySize = div_roundup(HistorySizeMs * SampleRate, 1000);
 	const double fHistorySize = (double)HistorySize;
@@ -346,8 +392,10 @@ int main(int argc, char** argv) {
 		}
 
 		// Render
-
-		RenderCpu_Render(pRenderState, aOutputHeight);
+		if (RendererId == RendererId_Legacy)
+			RenderLegacy_Render(pRenderState, aOutputHeight);
+		else if (RendererId == RendererId_Modern)
+			RenderModern_Render(pRenderState, aOutputHeight);
 	}
 	RenderEnd:
 
@@ -366,7 +414,10 @@ int main(int argc, char** argv) {
 	free(aSample);
 
 	CleanupRenderer:
-	RenderCpu_Destroy(pRenderState);
+	if (RendererId == RendererId_Legacy)
+		RenderLegacy_Destroy(pRenderState);
+	else if (RendererId == RendererId_Modern)
+		RenderModern_Destroy(pRenderState);
 
 	CleanupWindow:
 	SDL_DestroyWindow(pWindow);

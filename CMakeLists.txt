@@ -17,13 +17,22 @@ endmacro()
 project(MusicBars LANGUAGES C)
 
 add_subdirectory("${MusicBars_SOURCE_DIR}/Library/miniaudio")
-set(SDL_STATIC ON)
-set(SDL_SHARED OFF)
 set_target_properties(miniaudio PROPERTIES
 	INTERPROCEDURAL_OPTIMIZATION TRUE
 )
+
+set(SDL_STATIC ON)
+set(SDL_SHARED OFF)
 add_subdirectory("${MusicBars_SOURCE_DIR}/Library/SDL")
 set_target_properties(SDL3-static PROPERTIES
+	INTERPROCEDURAL_OPTIMIZATION TRUE
+)
+
+set(SDLSHADERCROSS_STATIC ON)
+set(SDLSHADERCROSS_SHARED OFF)
+set(SDLSHADERCROSS_VENDORED ON)
+add_subdirectory("${MusicBars_SOURCE_DIR}/Library/SDL_shadercross")
+set_target_properties(SDL3_shadercross-static PROPERTIES
 	INTERPROCEDURAL_OPTIMIZATION TRUE
 )
 
@@ -35,7 +44,8 @@ set(MusicBars_HEADER_FILES
 set(MusicBars_SOURCE_FILES
 	"${MusicBars_SOURCE_DIR}/Source/MatrixMult/Cpu.c"
 	"${MusicBars_SOURCE_DIR}/Source/Main.c"
-	"${MusicBars_SOURCE_DIR}/Source/Render/Cpu.c"
+	"${MusicBars_SOURCE_DIR}/Source/Render/Legacy.c"
+	"${MusicBars_SOURCE_DIR}/Source/Render/Modern.c"
 )
 set(MusicBars_INCLUDE_DIRECTORIES
 	"${MusicBars_SOURCE_DIR}/Source"
@@ -62,6 +72,7 @@ target_include_directories(MusicBars PRIVATE
 target_link_libraries(MusicBars
 	PRIVATE miniaudio
 	PRIVATE SDL3-static
+	PRIVATE SDL3_shadercross-static
 )
 set_target_properties(MusicBars PROPERTIES
 	INTERPROCEDURAL_OPTIMIZATION TRUE

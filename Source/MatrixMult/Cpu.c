@@ -299,8 +299,8 @@ void MatrixMultCpu_Compute(void* pStateIn, const float* aSample, float* aOutput)
 				float32x4_t vSample = vld1q_f32(&aSample[ii]);
 				float32x4_t vCos = vld1q_f32(&pState->DftMatrixCos[i * pState->HistorySize + ii]);
 				float32x4_t vSin = vld1q_f32(&pState->DftMatrixSin[i * pState->HistorySize + ii]);
-				vResultCos = vaddq_f32(vResultCos, vmulq_f32(vSample, vCos));
-				vResultSin = vaddq_f32(vResultSin, vmulq_f32(vSample, vSin));
+				vResultCos = vmlaq_f32(vResultCos, vSample, vCos);
+				vResultSin = vmlaq_f32(vResultSin, vSample, vSin);
 			}
 			float ResultCos = NeonReduceAdd(vResultCos);
 			float ResultSin = NeonReduceAdd(vResultSin);
