@@ -157,3 +157,7 @@
 #ifdef __unix__
 #define OS_UNIX 1
 #endif
+
+#ifdef __linux__
+#define OS_LINUX 1
+#endif

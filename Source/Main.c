@@ -328,7 +328,51 @@ int main(int argc, char** argv) {
 
 	// Start recording desktop audio
 
+	ma_result MiniAudioResult;
+
+#if OS_LINUX
+	// Find desktop audio capture device on Linux
+	ma_context AudioContext;
+
+	MiniAudioResult = ma_context_init(NULL, 0, NULL, &AudioContext);
+	if (MiniAudioResult != MA_SUCCESS) {
+		fprintf(stderr, "Failed to initialize audio AudioContext. Error code: %i\n", MiniAudioResult);
+		Result = -1;
+		goto CleanupAudioQueue;
+	}
+
+	ma_device_info* aPlaybackInfo;
+	ma_uint32 nPlayback;
+	ma_device_info* aCaptureInfo;
+	ma_uint32 nCapture;
+
+	MiniAudioResult = ma_context_get_devices(&AudioContext, &aPlaybackInfo, &nPlayback, &aCaptureInfo, &nCapture);
+	if (MiniAudioResult != MA_SUCCESS) {
+		printf("Failed to enumerate devices. Error code: %i\n", MiniAudioResult);
+		Result = -1;
+		goto CleanupAudioContext;
+	}
+
+	ma_device_id* pAudioDeviceId = NULL;
+	for (ma_uint32 i = 0; i < nCapture; i++) {
+		if (strcasestr(aCaptureInfo[i].name, "monitor") != NULL) {
+			pAudioDeviceId = &aCaptureInfo[i].id;
+			break;
+		}
+	}
+
+	if (pAudioDeviceId == NULL) {
+		fprintf(stderr, "Warning: No explicit monitor device found. Falling back to default system input.\n");
+	}
+#endif
+
+#if OS_LINUX
+	ma_device_config MiniAudioConfig = ma_device_config_init(ma_device_type_capture);
+	MiniAudioConfig.capture.pDeviceID = pAudioDeviceId;
+#else
 	ma_device_config MiniAudioConfig = ma_device_config_init(ma_device_type_loopback);
+#endif
+
 	MiniAudioConfig.capture.format = ma_format_f32;
 	MiniAudioConfig.capture.channels = 1;
 	MiniAudioConfig.sampleRate = SampleRate;
@@ -337,7 +381,7 @@ int main(int argc, char** argv) {
 	MiniAudioConfig.noFixedSizedCallback = true;
 
 	ma_device AudioDevice;
-	ma_result MiniAudioResult = ma_device_init(NULL, &MiniAudioConfig, &AudioDevice);
+	MiniAudioResult = ma_device_init(NULL, &MiniAudioConfig, &AudioDevice);
 	if (MiniAudioResult != MA_SUCCESS) {
 		fprintf(stderr, "Unable to initialize audio device. Error code: %i\n", MiniAudioResult);
 		Result = -1;
@@ -402,6 +446,11 @@ int main(int argc, char** argv) {
 	RenderEnd:
 
 	// Cleanup
+
+#if OS_LINUX
+	CleanupAudioContext:
+	ma_context_uninit(&AudioContext);
+#endif
 
 	CleanupAudioDevice:
 	ma_device_uninit(&AudioDevice);
