@@ -37,7 +37,7 @@
 // TODO: Separate into files to prevent autovectorization of scalar code
 
 typedef struct {
-	size_t HistorySize;
+	size_t VectorSize;
 	size_t nBar;
 	float* DftMatrixCos;
 	float* DftMatrixSin;
@@ -77,7 +77,7 @@ typedef struct {
 } matrix_mult_cpu_state;
 
 void* MatrixMultCpu_Init(
-	size_t HistorySize,
+	size_t VectorSize,
 	size_t nBar,
 	float* DftMatrixCos,
 	float* DftMatrixSin
@@ -85,7 +85,7 @@ void* MatrixMultCpu_Init(
 	matrix_mult_cpu_state* pState = malloc(sizeof(matrix_mult_cpu_state));
 	if (pState == NULL)
 		return NULL;
-	pState->HistorySize = HistorySize;
+	pState->VectorSize = VectorSize;
 	pState->nBar = nBar;
 	pState->DftMatrixCos = DftMatrixCos;
 	pState->DftMatrixSin = DftMatrixSin;
@@ -197,18 +197,18 @@ void MatrixMultCpu_Compute(void* pStateIn, const float* aSample, float* aOutput)
 		for (size_t i = 0; i < pState->nBar; ++i) {
 			__m256 vResultCos = _mm256_set1_ps(0.0f);
 			__m256 vResultSin = _mm256_set1_ps(0.0f);
-			for (size_t ii = 0; ii < pState->HistorySize / 8 * 8; ii += 8) {
+			for (size_t ii = 0; ii < pState->VectorSize / 8 * 8; ii += 8) {
 				__m256 vSample = _mm256_loadu_ps(&aSample[ii]);
-				__m256 vCos = _mm256_loadu_ps(&pState->DftMatrixCos[i * pState->HistorySize + ii]);
-				__m256 vSin = _mm256_loadu_ps(&pState->DftMatrixSin[i * pState->HistorySize + ii]);
+				__m256 vCos = _mm256_loadu_ps(&pState->DftMatrixCos[i * pState->VectorSize + ii]);
+				__m256 vSin = _mm256_loadu_ps(&pState->DftMatrixSin[i * pState->VectorSize + ii]);
 				vResultCos = _mm256_fmadd_ps(vSample, vCos, vResultCos);
 				vResultSin = _mm256_fmadd_ps(vSample, vSin, vResultSin);
 			}
 			float ResultCos = AvxReduceAdd(vResultCos);
 			float ResultSin = AvxReduceAdd(vResultSin);
-			for (size_t ii = pState->HistorySize / 8 * 8; ii < pState->HistorySize; ++ii) {
-				ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->HistorySize + ii];
-				ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->HistorySize + ii];
+			for (size_t ii = pState->VectorSize / 8 * 8; ii < pState->VectorSize; ++ii) {
+				ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->VectorSize + ii];
+				ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->VectorSize + ii];
 			}
 			aOutput[i] = sqrtf(ResultCos * ResultCos + ResultSin * ResultSin);
 		}
@@ -221,18 +221,18 @@ void MatrixMultCpu_Compute(void* pStateIn, const float* aSample, float* aOutput)
 		for (size_t i = 0; i < pState->nBar; ++i) {
 			__m256 vResultCos = _mm256_set1_ps(0.0f);
 			__m256 vResultSin = _mm256_set1_ps(0.0f);
-			for (size_t ii = 0; ii < pState->HistorySize / 8 * 8; ii += 8) {
+			for (size_t ii = 0; ii < pState->VectorSize / 8 * 8; ii += 8) {
 				__m256 vSample = _mm256_loadu_ps(&aSample[ii]);
-				__m256 vCos = _mm256_loadu_ps(&pState->DftMatrixCos[i * pState->HistorySize + ii]);
-				__m256 vSin = _mm256_loadu_ps(&pState->DftMatrixSin[i * pState->HistorySize + ii]);
+				__m256 vCos = _mm256_loadu_ps(&pState->DftMatrixCos[i * pState->VectorSize + ii]);
+				__m256 vSin = _mm256_loadu_ps(&pState->DftMatrixSin[i * pState->VectorSize + ii]);
 				vResultCos = _mm256_add_ps(vResultCos, _mm256_mul_ps(vSample, vCos));
 				vResultSin = _mm256_add_ps(vResultSin, _mm256_mul_ps(vSample, vSin));
 			}
 			float ResultCos = AvxReduceAdd(vResultCos);
 			float ResultSin = AvxReduceAdd(vResultSin);
-			for (size_t ii = pState->HistorySize / 8 * 8; ii < pState->HistorySize; ++ii) {
-				ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->HistorySize + ii];
-				ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->HistorySize + ii];
+			for (size_t ii = pState->VectorSize / 8 * 8; ii < pState->VectorSize; ++ii) {
+				ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->VectorSize + ii];
+				ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->VectorSize + ii];
 			}
 			aOutput[i] = sqrtf(ResultCos * ResultCos + ResultSin * ResultSin);
 		}
@@ -245,18 +245,18 @@ void MatrixMultCpu_Compute(void* pStateIn, const float* aSample, float* aOutput)
 		for (size_t i = 0; i < pState->nBar; ++i) {
 			__m128 vResultCos = _mm_set1_ps(0.0f);
 			__m128 vResultSin = _mm_set1_ps(0.0f);
-			for (size_t ii = 0; ii < pState->HistorySize / 4 * 4; ii += 4) {
+			for (size_t ii = 0; ii < pState->VectorSize / 4 * 4; ii += 4) {
 				__m128 vSample = _mm_loadu_ps(&aSample[ii]);
-				__m128 vCos = _mm_loadu_ps(&pState->DftMatrixCos[i * pState->HistorySize + ii]);
-				__m128 vSin = _mm_loadu_ps(&pState->DftMatrixSin[i * pState->HistorySize + ii]);
+				__m128 vCos = _mm_loadu_ps(&pState->DftMatrixCos[i * pState->VectorSize + ii]);
+				__m128 vSin = _mm_loadu_ps(&pState->DftMatrixSin[i * pState->VectorSize + ii]);
 				vResultCos = _mm_add_ps(vResultCos, _mm_mul_ps(vSample, vCos));
 				vResultSin = _mm_add_ps(vResultSin, _mm_mul_ps(vSample, vSin));
 			}
 			float ResultCos = SseReduceAdd(vResultCos);
 			float ResultSin = SseReduceAdd(vResultSin);
-			for (size_t ii = pState->HistorySize / 4 * 4; ii < pState->HistorySize; ++ii) {
-				ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->HistorySize + ii];
-				ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->HistorySize + ii];
+			for (size_t ii = pState->VectorSize / 4 * 4; ii < pState->VectorSize; ++ii) {
+				ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->VectorSize + ii];
+				ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->VectorSize + ii];
 			}
 			aOutput[i] = sqrtf(ResultCos * ResultCos + ResultSin * ResultSin);
 		}
@@ -271,18 +271,18 @@ void MatrixMultCpu_Compute(void* pStateIn, const float* aSample, float* aOutput)
 		for (size_t i = 0; i < pState->nBar; ++i) {
 			float32x4_t vResultCos = vdupq_n_f32(0.0f);
 			float32x4_t vResultSin = vdupq_n_f32(0.0f);
-			for (size_t ii = 0; ii < pState->HistorySize / 4 * 4; ii += 4) {
+			for (size_t ii = 0; ii < pState->VectorSize / 4 * 4; ii += 4) {
 				float32x4_t vSample = vld1q_f32(&aSample[ii]);
-				float32x4_t vCos = vld1q_f32(&pState->DftMatrixCos[i * pState->HistorySize + ii]);
-				float32x4_t vSin = vld1q_f32(&pState->DftMatrixSin[i * pState->HistorySize + ii]);
+				float32x4_t vCos = vld1q_f32(&pState->DftMatrixCos[i * pState->VectorSize + ii]);
+				float32x4_t vSin = vld1q_f32(&pState->DftMatrixSin[i * pState->VectorSize + ii]);
 				vResultCos = vfmaq_f32(vResultCos, vSample, vCos);
 				vResultSin = vfmaq_f32(vResultSin, vSample, vSin);
 			}
 			float ResultCos = NeonReduceAdd(vResultCos);
 			float ResultSin = NeonReduceAdd(vResultSin);
-			for (size_t ii = pState->HistorySize / 4 * 4; ii < pState->HistorySize; ++ii) {
-				ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->HistorySize + ii];
-				ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->HistorySize + ii];
+			for (size_t ii = pState->VectorSize / 4 * 4; ii < pState->VectorSize; ++ii) {
+				ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->VectorSize + ii];
+				ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->VectorSize + ii];
 			}
 			aOutput[i] = sqrtf(ResultCos * ResultCos + ResultSin * ResultSin);
 		}
@@ -295,18 +295,18 @@ void MatrixMultCpu_Compute(void* pStateIn, const float* aSample, float* aOutput)
 		for (size_t i = 0; i < pState->nBar; ++i) {
 			float32x4_t vResultCos = vdupq_n_f32(0.0f);
 			float32x4_t vResultSin = vdupq_n_f32(0.0f);
-			for (size_t ii = 0; ii < pState->HistorySize / 4 * 4; ii += 4) {
+			for (size_t ii = 0; ii < pState->VectorSize / 4 * 4; ii += 4) {
 				float32x4_t vSample = vld1q_f32(&aSample[ii]);
-				float32x4_t vCos = vld1q_f32(&pState->DftMatrixCos[i * pState->HistorySize + ii]);
-				float32x4_t vSin = vld1q_f32(&pState->DftMatrixSin[i * pState->HistorySize + ii]);
+				float32x4_t vCos = vld1q_f32(&pState->DftMatrixCos[i * pState->VectorSize + ii]);
+				float32x4_t vSin = vld1q_f32(&pState->DftMatrixSin[i * pState->VectorSize + ii]);
 				vResultCos = vmlaq_f32(vResultCos, vSample, vCos);
 				vResultSin = vmlaq_f32(vResultSin, vSample, vSin);
 			}
 			float ResultCos = NeonReduceAdd(vResultCos);
 			float ResultSin = NeonReduceAdd(vResultSin);
-			for (size_t ii = pState->HistorySize / 4 * 4; ii < pState->HistorySize; ++ii) {
-				ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->HistorySize + ii];
-				ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->HistorySize + ii];
+			for (size_t ii = pState->VectorSize / 4 * 4; ii < pState->VectorSize; ++ii) {
+				ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->VectorSize + ii];
+				ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->VectorSize + ii];
 			}
 			aOutput[i] = sqrtf(ResultCos * ResultCos + ResultSin * ResultSin);
 		}
@@ -320,9 +320,9 @@ void MatrixMultCpu_Compute(void* pStateIn, const float* aSample, float* aOutput)
 		// For consitency with GPU, use single-precision accumulators.
 		float ResultCos = 0.0f;
 		float ResultSin = 0.0f;
-		for (size_t ii = 0; ii < pState->HistorySize; ++ii) {
-			ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->HistorySize + ii];
-			ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->HistorySize + ii];
+		for (size_t ii = 0; ii < pState->VectorSize; ++ii) {
+			ResultCos += aSample[ii] * pState->DftMatrixCos[i * pState->VectorSize + ii];
+			ResultSin += aSample[ii] * pState->DftMatrixSin[i * pState->VectorSize + ii];
 		}
 		aOutput[i] = sqrtf(ResultCos * ResultCos + ResultSin * ResultSin);
 	}

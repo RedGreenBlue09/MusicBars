@@ -115,8 +115,8 @@ typedef struct {
 	size_t WindowW;
 	size_t WindowH;
 	size_t nBar;
-	size_t BarWidth;
-	size_t BarGap;
+	float fBarWidth;
+	float fBarGap;
 	uint32_t BackgroundColor;
 	uint32_t BarColor;
 
@@ -133,8 +133,8 @@ void* RenderModern_Init(
 	size_t WindowW,
 	size_t WindowH,
 	size_t nBar,
-	size_t BarWidth,
-	size_t BarGap,
+	float fBarWidth,
+	float fBarGap,
 	uint32_t BackgroundColor,
 	uint32_t BarColor
 ) {
@@ -150,22 +150,26 @@ void* RenderModern_Init(
 	pState->WindowH = RealWindowH;
 
 	pState->nBar = nBar;
-	pState->BarWidth = BarWidth;
-	pState->BarGap = BarGap;
+	pState->fBarWidth = fBarWidth;
+	pState->fBarGap = fBarGap;
 	pState->BackgroundColor = BackgroundColor;
 	pState->BarColor = BarColor;
 
-	// GPU pState->pDevice
+	// GPU device
 
-	pState->pDevice = SDL_CreateGPUDevice(
-		SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_MSL,
+	// temp
+	SDL_PropertiesID Props = SDL_CreateProperties();
+	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, true);
+	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
+	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
 #if NDEBUG
-		false,
+	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false);
 #else
-		true,
+	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, true);
 #endif
-		NULL
-	);
+	pState->pDevice = SDL_CreateGPUDeviceWithProperties(Props);
+	SDL_DestroyProperties(Props);
+
 	if (pState->pDevice == NULL)
 		goto CleanupState;
 
@@ -321,7 +325,8 @@ void RenderModern_Render(void* pStateIn, const float* aOutput) {
 
 	size_t BarHeightBufferSize = array_size(aOutput, pState->nBar);
 	size_t BarHeightBufferGpuSize = div_roundup(BarHeightBufferSize, 16) * 16;
-	memcpy(aBarHeight, aOutput, BarHeightBufferSize);
+	for (size_t i = 0; i < pState->nBar; ++i)
+		aBarHeight[i] = fmaxf(aOutput[i], 1.0f / (float)pState->WindowH);
 	memset(&aBarHeight[pState->nBar], BarHeightBufferGpuSize - BarHeightBufferSize, 0);
 
 	SDL_UnmapGPUTransferBuffer(pState->pDevice, pState->pTransferBuffer);
@@ -399,8 +404,8 @@ void RenderModern_Render(void* pStateIn, const float* aOutput) {
 
 		cbv_parameter CbvParameter = {
 			{fBarColor[0], fBarColor[1], fBarColor[2], fBarColor[3]},
-			(float)pState->BarWidth / (float)pState->WindowW,
-			(float)pState->BarGap / (float)pState->WindowW
+			pState->fBarWidth / (float)pState->WindowW,
+			pState->fBarGap / (float)pState->WindowW
 		};
 		SDL_PushGPUVertexUniformData(
 			pCommandBuffer,

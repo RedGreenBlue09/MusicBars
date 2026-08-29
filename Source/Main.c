@@ -88,35 +88,52 @@ static void ReceiveAudio(ma_device* pDevice, void* pOutput, const void* pInput, 
 }
 
 static const double gfPi = 0x1.921FB54442D18p1;
+static const double gfSincIntegral = 0x1.2DD19DD527867p-1; // Si(pi) / pi
 
 static inline double DftWindow(double X) {
 	// Rectangular window
+	// Norm = 1
+	// Main lobe = 2
+	
 	//return 1.0;
 	
-	// Parabolic window (norm = 2 / 3)
+	// Parabolic (Welch) window
+	// Norm = 2 / 3
+	// Main lobe ~ 2.8606
+	
 	//return -4.0 * X * X + 4.0 * X;
 	
-	// Sine window (norm = 2 / pi)
-	return sin(gfPi * X);
+	// Sine window
+	// Norm = 2 / pi = 0x1.45F306DC9C883p-1
+	// Main lobe = 3
 	
-	// Sinc window (norm = Si(pi) / pi)
-	/*
-	X = 2.0 * X - 1.0;
-	if (X == 0.0)
-		return 1.0;
-	else
-		return sin(gfPi * X) / (gfPi * X);
-	*/
+	//return sin(gfPi * X);
+	
+	// Sinc window
+	// Norm = Si(pi) / pi = 0x1.2DD19DD527867p-1
+	// Main lobe ~ 3.277
+	
+	//X = 2.0 * X - 1.0;
+	//return (X == 0.0) ? 1.0 : (sin(gfPi * X) / (gfPi * X));
 
-	// Hann window (norm = 0.5)
-	/*
-	double Result = sin(gfPi * X);
-	return Result * Result;
-	*/
+	// Hann window
+	// Norm = 0.5
+	// Main lobe = 4
+
+	//double Result = sin(gfPi * X);
+	//return Result * Result;
+
+	// Hann-Poisson window
+	// Norm = (1 - 1 / e) / 2 + (1 + 1 / e) / (2 * (1 + pi ^ 2)) = 0x1.8413FD8338362p-2
+	// Main lobe = inf, but we use from Hann
+
+	double Sin = sin(gfPi * X);
+	return exp(-2.0 * fabs(X - 0.5)) * Sin * Sin;
 }
 
 // Normalizing factor: Integral from 0 to 1 of the window.
-static const double gfDftWindowNorm = 2.0 / 0x1.921FB54442D18p1;//0x1.2DD19DD527867p-1;
+static const double gfDftWindowNorm = 0x1.8413FD8338362p-2;
+static const double gfDftWindowMainLobe = 4;
 
 typedef enum {
 	RendererId_Legacy,
@@ -128,8 +145,8 @@ void* RenderLegacy_Init(
 	size_t WindowW,
 	size_t WindowH,
 	size_t nBar,
-	size_t BarWidth,
-	size_t BarGap,
+	float fBarWidth,
+	float fBarGap,
 	uint32_t BackgroundColor,
 	uint32_t BarColor
 );
@@ -141,8 +158,8 @@ void* RenderModern_Init(
 	size_t WindowW,
 	size_t WindowH,
 	size_t nBar,
-	size_t BarWidth,
-	size_t BarGap,
+	float fBarWidth,
+	float fBarGap,
 	uint32_t BackgroundColor,
 	uint32_t BarColor
 );
@@ -150,7 +167,7 @@ void RenderModern_Render(void* pStateIn, const float* aOutput);
 void RenderModern_Destroy(void* pStateIn);
 
 void* MatrixMultCpu_Init(
-	size_t HistorySize,
+	size_t VectorSize,
 	size_t nBar,
 	float* DftMatrixCos,
 	float* DftMatrixSin
@@ -186,15 +203,28 @@ int main(int argc, char** argv) {
 	int Result = 0;
 
 	// TODO: Read from config
-	const size_t FreqMin = 25;
-	const size_t FreqMax = 250;
-	const size_t nBar = 80;
-	const size_t HistorySizeMs = 160;
-	const double fSensitivity = 16.0;
+	// Trap Nation
+	//const double fFreqMin = 25;
+	//const double fFreqMax = 140;
+	//const size_t HistorySizeMs = 150;
+	const double fFreqMin = 25;
+	const double fFreqMax = 20000;
+	const size_t HistorySizeMs = 150;
+	const double fSensitivity = 30.0;
+	const bool bLogScale = true;
+	const bool bUniformMainLobe = true;
 
-	const size_t BarGap = 5;
-	const size_t BarWidth = 10;
-	const size_t WindowW = nBar * BarWidth + (nBar - 1) * BarGap;
+	// Stress test
+	//const size_t nBar = 1200;
+	//const float fBarGap = 0.0f;
+	//const float fBarWidth = 1.0f;
+
+	const size_t nBar = 80;
+	const float fBarGap = 5.0f;
+	const float fBarWidth = 10.0f;
+	const double fnBar = (double)nBar;
+	const size_t WindowW =
+		(size_t)(fnBar * fBarWidth + (fnBar - 1.0) * fBarGap);
 	const size_t WindowH = 400;
 	const uint32_t BackgroundColor = 0x00000000;
 	const uint32_t BarColor = 0xFFFFFFFF;
@@ -208,9 +238,9 @@ int main(int argc, char** argv) {
 	}
 	SDL_Window* pWindow = SDL_CreateWindow(
 		"MusicBars",
-		(int)WindowW,
+		(int)WindowW, // TODO: set size to 1 and let the renderer cook
 		(int)WindowH,
-		SDL_WINDOW_TRANSPARENT | SDL_WINDOW_BORDERLESS
+		SDL_WINDOW_BORDERLESS | SDL_WINDOW_TRANSPARENT
 	); // DX12 GPU renderer does not work with TRANSPARENT yet. Waiting on SDL...
 	if (!pWindow) {
 		fprintf(stderr, "Unable to create the window: %s", SDL_GetError());
@@ -230,8 +260,8 @@ int main(int argc, char** argv) {
 			WindowW,
 			WindowH,
 			nBar,
-			BarWidth,
-			BarGap,
+			fBarWidth,
+			fBarGap,
 			BackgroundColor,
 			BarColor
 		);
@@ -245,8 +275,8 @@ int main(int argc, char** argv) {
 			WindowW,
 			WindowH,
 			nBar,
-			BarWidth,
-			BarGap,
+			fBarWidth,
+			fBarGap,
 			BackgroundColor,
 			BarColor
 		);
@@ -262,23 +292,25 @@ int main(int argc, char** argv) {
 
 	// Build the DFT matrix
 
-	const double fFreqMin = (double)FreqMin;
-	const double fFreqMax = (double)FreqMax;
-	const size_t SampleRate = 48000;//FreqMax * 12 / 5; // TODO: Clamp to avoid upsampling
+	// TODO: Calculate minimum sample rate required.
+	const size_t SampleRate = 96000;//FreqMax * 12 / 5;
 	const double fSampleRate = (double)SampleRate;
 	const size_t HistorySize = div_roundup(HistorySizeMs * SampleRate, 1000);
 	const double fHistorySize = (double)HistorySize;
+	const double fHistorySizeSec = fHistorySize / fSampleRate;
 
 	// TODO: Actual arena
 	float* aSample;
 	float* aSampleTemp; // Buffer for rotation
 	float* aOutputHeight;
+	float* aOutputHeightOld;
 	float* DftMatrixCos;
 	float* DftMatrixSin;
 	aSample = malloc(
 		array_size(aSample, HistorySize) +
 		array_size(aSampleTemp, HistorySize) +
 		array_size(aOutputHeight, nBar) +
+		array_size(aOutputHeightOld, nBar) +
 		array_size(DftMatrixCos, nBar * HistorySize) +
 		array_size(DftMatrixSin, nBar * HistorySize)
 	);
@@ -289,19 +321,65 @@ int main(int argc, char** argv) {
 	}
 	aSampleTemp = &aSample[HistorySize];
 	aOutputHeight = &aSampleTemp[HistorySize];
-	DftMatrixCos = &aOutputHeight[nBar];
+	aOutputHeightOld = &aOutputHeight[nBar];
+	DftMatrixCos = &aOutputHeightOld[nBar];
 	DftMatrixSin = &DftMatrixCos[nBar * HistorySize];
 
 	for (size_t i = 0; i < nBar; ++i) {
-		double fFreq = fFreqMin * pow(fFreqMax / fFreqMin, (double)i / (double)(nBar - 1));
-		for (size_t ii = 0; ii < HistorySize; ++ii) {
-			double fAngle = 2.0 * gfPi * fFreq * (double)ii / fSampleRate;
-			double fWindowFactor = DftWindow((double)ii / fHistorySize);
-			DftMatrixCos[i * HistorySize + ii] = (float)(cos(fAngle) * fWindowFactor);
-			DftMatrixSin[i * HistorySize + ii] = (float)(sin(fAngle) * fWindowFactor);
+		double fFreq;
+		if (bLogScale)
+			fFreq = fFreqMin * pow(fFreqMax / fFreqMin, (double)i / (fnBar - 1.0));
+		else
+			fFreq = fFreqMin + (fFreqMax - fFreqMin) * ((double)i / (fnBar - 1.0));
+
+		size_t LocalHistorySize;
+		if (bLogScale && bUniformMainLobe) {
+			LocalHistorySize = (size_t)(fHistorySize * (fFreqMin / fFreq));
+		} else {
+			LocalHistorySize = HistorySize;
+		}
+
+		// MainLobe = gfDftWindowMainLobe / fHistorySizeSec
+		// If log scale, we scale it accordingly.
+		// But in both log & linear scale, the main lobe might be
+		// smaller than the frequency range covered by a single bar.
+		// Largest range covered by a bar:
+		// Log scale: fFreqMax * (1 - 1 / (fFreqMax / fFreqMin) ^ (1 / (nBar - 1))) 
+		// Linear scale: (fFreqMax - fFreqMin) / nBar
+		// In addition, the main lobe has the sinc shape,
+		// in which the power reduces to 0 at the edge.
+		// This shape has an area of Si(pi) / pi ~ 0.58
+		// Therefore, we want at least 58% overlap between each main lobe
+		// so inputs with frequency at the edge can still be seen.
+		// In other words, we want every main lobe to cover at least 
+		// ~ pi / Si(pi) ~ 1.7 bars.
+		// Lastly, if HistorySize is too small, there might be aliasing.
+		// Upsampling is a workaround.
+		double FrequencyGap;
+		if (bLogScale)
+			FrequencyGap = fFreq * (pow(fFreqMax / fFreqMin, 1.0 / (fnBar - 1.0)) - 1.0);
+		else
+			FrequencyGap = (fFreqMax - fFreqMin) / fnBar;
+		size_t MaxLocalHistorySize =
+			(size_t)(fSampleRate * gfDftWindowMainLobe * gfSincIntegral / FrequencyGap);
+
+		LocalHistorySize = min_macro(LocalHistorySize, MaxLocalHistorySize);
+		double fLocalHistorySize = (double)LocalHistorySize;
+
+		for (size_t ii = 0; ii < HistorySize - LocalHistorySize; ++ii) {
+			DftMatrixCos[i * HistorySize + ii] = 0.0f;
+			DftMatrixSin[i * HistorySize + ii] = 0.0f;
+		}
+		for (size_t ii = HistorySize - LocalHistorySize; ii < HistorySize; ++ii) {
+			size_t iii = ii - (HistorySize - LocalHistorySize);
+			double fAngle = 2.0 * gfPi * fFreq * (double)iii / fSampleRate;
+			double fWindowFactor = DftWindow((double)iii / fLocalHistorySize);
+			DftMatrixCos[i * HistorySize + ii] =
+				(float)(cos(fAngle) * fWindowFactor / fLocalHistorySize);
+			DftMatrixSin[i * HistorySize + ii] =
+				(float)(sin(fAngle) * fWindowFactor / fLocalHistorySize);
 		}
 	}
-
 	// Create matrix multiplication engine
 
 	void* pMatrixMultState = MatrixMultCpu_Init(
@@ -348,7 +426,7 @@ int main(int argc, char** argv) {
 
 	MiniAudioResult = ma_context_get_devices(&AudioContext, &aPlaybackInfo, &nPlayback, &aCaptureInfo, &nCapture);
 	if (MiniAudioResult != MA_SUCCESS) {
-		printf("Failed to enumerate devices. Error code: %i\n", MiniAudioResult);
+		fprintf(stderr, "Failed to enumerate devices. Error code: %i\n", MiniAudioResult);
 		Result = -1;
 		goto CleanupAudioContext;
 	}
@@ -399,6 +477,9 @@ int main(int argc, char** argv) {
 
 	size_t nSampleCollected = 0;
 	size_t iTemp = 0;
+	memset(aSample, 0, array_size(aSample, HistorySize));
+	memset(aSampleTemp, 0, array_size(aSampleTemp, HistorySize));
+	memset(aOutputHeightOld, 0, array_size(aOutputHeightOld, nBar));
 	while (true) {
 		SDL_Event Event;
 		while (SDL_PollEvent(&Event)) {
@@ -414,34 +495,38 @@ int main(int argc, char** argv) {
 		while (AudioQueue_TryPop(&Queue, &fSample)) {
 			aSampleTemp[iTemp++] = fSample;
 			iTemp = (iTemp >= HistorySize) ? 0 : iTemp;
-			nSampleCollected = (nSampleCollected < HistorySize) ? nSampleCollected + 1 : HistorySize;
-		}
-		if (nSampleCollected < HistorySize) {
-			thrd_yield(); // TODO: Proper backoff
-			continue;
+			nSampleCollected = min_macro(nSampleCollected + 1, HistorySize);
 		}
 
-		// Rotate the buffer & normalize before matrix mult
+		// Rotate the buffer
 
 		for (size_t i = iTemp; i < HistorySize; ++i)
-			aSample[i - iTemp] = aSampleTemp[i] / fHistorySize;
+			aSample[i - iTemp] = aSampleTemp[i];
 		for (size_t i = 0; i < iTemp; ++i)
-			aSample[HistorySize - iTemp + i] = aSampleTemp[i] / fHistorySize;
+			aSample[HistorySize - iTemp + i] = aSampleTemp[i];
 
 		// Matrix multiplication
 
 		MatrixMultCpu_Compute(pMatrixMultState, aSample, aOutputHeight);
-		// Normalize
+
+		// Normalize & apply rate filter
+
+		// FIXME: This rate filter is not working very well
+		// to hide the noise caused by throwing away samples.
+		double fRate
+			 = 1.0 - exp(-(1.0 / 60.0) * log(1.0 / (1.0 - 0.99)) / fHistorySizeSec); // TODO: calculate FPS
+
 		for (size_t i = 0; i < nBar; ++i) {
 			aOutputHeight[i] = (double)aOutputHeight[i] * gfDftWindowNorm * fSensitivity;
-			aOutputHeight[i] = (aOutputHeight[i] > 1.0) ? 1.0 : aOutputHeight[i];
+			aOutputHeight[i] = fminf(aOutputHeight[i], 1.0f);
+			aOutputHeightOld[i] += fRate * (aOutputHeight[i] - aOutputHeightOld[i]);
 		}
 
 		// Render
 		if (RendererId == RendererId_Legacy)
-			RenderLegacy_Render(pRenderState, aOutputHeight);
+			RenderLegacy_Render(pRenderState, aOutputHeightOld);
 		else if (RendererId == RendererId_Modern)
-			RenderModern_Render(pRenderState, aOutputHeight);
+			RenderModern_Render(pRenderState, aOutputHeightOld);
 	}
 	RenderEnd:
 

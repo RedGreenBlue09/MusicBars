@@ -16,12 +16,12 @@ typedef struct {
 	size_t WindowW;
 	size_t WindowH;
 	size_t nBar;
-	size_t BarWidth;
-	size_t BarGap;
+	float fBarWidth;
+	float fBarGap;
 	uint32_t BackgroundColor;
 	uint32_t BarColor;
 	SDL_Renderer* pRenderer;
-	SDL_FRect* pRects;
+	SDL_FRect* aRectangle;
 } render_legacy_state;
 
 void* RenderLegacy_Init(
@@ -29,8 +29,8 @@ void* RenderLegacy_Init(
 	size_t WindowW,
 	size_t WindowH,
 	size_t nBar,
-	size_t BarWidth,
-	size_t BarGap,
+	float fBarWidth,
+	float fBarGap,
 	uint32_t BackgroundColor,
 	uint32_t BarColor
 ) {
@@ -41,8 +41,8 @@ void* RenderLegacy_Init(
 	pState->WindowW = WindowW;
 	pState->WindowH = WindowH;
 	pState->nBar = nBar;
-	pState->BarWidth = BarWidth;
-	pState->BarGap = BarGap;
+	pState->fBarWidth = fBarWidth;
+	pState->fBarGap = fBarGap;
 	pState->BackgroundColor = BackgroundColor;
 	pState->BarColor = BarColor;
 
@@ -54,13 +54,13 @@ void* RenderLegacy_Init(
 	SDL_SetRenderVSync(pRenderer, 1); // This adds a LOT of latency. TODO: Configurable
 	pState->pRenderer = pRenderer;
 
-	SDL_FRect* pRects = malloc(nBar * sizeof(SDL_FRect));
-	if (pRects == NULL) {
+	SDL_FRect* aRectangle = malloc(array_size(aRectangle, nBar));
+	if (aRectangle == NULL) {
 		SDL_DestroyRenderer(pRenderer);
 		free(pState);
 		return NULL;
 	}
-	pState->pRects = pRects;
+	pState->aRectangle = aRectangle;
 
 	return pState;
 }
@@ -78,10 +78,10 @@ void RenderLegacy_Render(void* pStateIn, const float* aOutput) {
 	for (size_t i = 0; i < pState->nBar; ++i) {
 		float BarHeight = aOutput[i] * (float)pState->WindowH;
 		BarHeight = fmaxf(BarHeight, 1.0f);
-		pState->pRects[i] = (SDL_FRect){
-			.x = (float)(i * (pState->BarWidth + pState->BarGap)),
+		pState->aRectangle[i] = (SDL_FRect){
+			.x = (float)i * (pState->fBarWidth + pState->fBarGap),
 			.y = (float)pState->WindowH - BarHeight,
-			.w = (float)pState->BarWidth,
+			.w = pState->fBarWidth,
 			.h = BarHeight
 		};
 	}
@@ -92,13 +92,13 @@ void RenderLegacy_Render(void* pStateIn, const float* aOutput) {
 		(uint8_t)(pState->BarColor >> 8),
 		(uint8_t)(pState->BarColor >> 0) // FIXME: This alpha param isn't do anything
 	);
-	SDL_RenderFillRects(pState->pRenderer, pState->pRects, (int)pState->nBar);
+	SDL_RenderFillRects(pState->pRenderer, pState->aRectangle, (int)pState->nBar);
 	SDL_RenderPresent(pState->pRenderer);
 }
 
 void RenderLegacy_Destroy(void* pStateIn) {
 	render_legacy_state* pState = (render_legacy_state*)pStateIn;
-	free(pState->pRects);
+	free(pState->aRectangle);
 	SDL_DestroyRenderer(pState->pRenderer);
 	free(pState);
 }
