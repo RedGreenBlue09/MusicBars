@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
 	const double fFreqMin = 25;
 	const double fFreqMax = 20000;
 	const size_t HistorySizeMs = 150;
-	const double fSensitivity = 30.0;
+	const double fSensitivity = 5.0;
 	const bool bLogScale = true;
 	const bool bUniformMainLobe = true;
 
@@ -226,7 +226,7 @@ int main(int argc, char** argv) {
 	const size_t WindowW =
 		(size_t)(fnBar * fBarWidth + (fnBar - 1.0) * fBarGap);
 	const size_t WindowH = 400;
-	const uint32_t BackgroundColor = 0x00000000;
+	const uint32_t BackgroundColor = 0x0000007F;
 	const uint32_t BarColor = 0xFFFFFFFF;
 
 	// Create SDL window
@@ -293,7 +293,7 @@ int main(int argc, char** argv) {
 	// Build the DFT matrix
 
 	// TODO: Calculate minimum sample rate required.
-	const size_t SampleRate = 96000;//FreqMax * 12 / 5;
+	const size_t SampleRate = 48000;//FreqMax * 12 / 5;
 	const double fSampleRate = (double)SampleRate;
 	const size_t HistorySize = div_roundup(HistorySizeMs * SampleRate, 1000);
 	const double fHistorySize = (double)HistorySize;
@@ -326,19 +326,6 @@ int main(int argc, char** argv) {
 	DftMatrixSin = &DftMatrixCos[nBar * HistorySize];
 
 	for (size_t i = 0; i < nBar; ++i) {
-		double fFreq;
-		if (bLogScale)
-			fFreq = fFreqMin * pow(fFreqMax / fFreqMin, (double)i / (fnBar - 1.0));
-		else
-			fFreq = fFreqMin + (fFreqMax - fFreqMin) * ((double)i / (fnBar - 1.0));
-
-		size_t LocalHistorySize;
-		if (bLogScale && bUniformMainLobe) {
-			LocalHistorySize = (size_t)(fHistorySize * (fFreqMin / fFreq));
-		} else {
-			LocalHistorySize = HistorySize;
-		}
-
 		// MainLobe = gfDftWindowMainLobe / fHistorySizeSec
 		// If log scale, we scale it accordingly.
 		// But in both log & linear scale, the main lobe might be
@@ -355,6 +342,13 @@ int main(int argc, char** argv) {
 		// ~ pi / Si(pi) ~ 1.7 bars.
 		// Lastly, if HistorySize is too small, there might be aliasing.
 		// Upsampling is a workaround.
+
+		double fFreq;
+		if (bLogScale)
+			fFreq = fFreqMin * pow(fFreqMax / fFreqMin, (double)i / (fnBar - 1.0));
+		else
+			fFreq = fFreqMin + (fFreqMax - fFreqMin) * ((double)i / (fnBar - 1.0));
+
 		double FrequencyGap;
 		if (bLogScale)
 			FrequencyGap = fFreq * (pow(fFreqMax / fFreqMin, 1.0 / (fnBar - 1.0)) - 1.0);
@@ -362,6 +356,12 @@ int main(int argc, char** argv) {
 			FrequencyGap = (fFreqMax - fFreqMin) / fnBar;
 		size_t MaxLocalHistorySize =
 			(size_t)(fSampleRate * gfDftWindowMainLobe * gfSincIntegral / FrequencyGap);
+
+		size_t LocalHistorySize;
+		if (bLogScale && bUniformMainLobe)
+			LocalHistorySize = (size_t)(fHistorySize * (fFreqMin / fFreq));
+		else
+			LocalHistorySize = HistorySize;
 
 		LocalHistorySize = min_macro(LocalHistorySize, MaxLocalHistorySize);
 		double fLocalHistorySize = (double)LocalHistorySize;
@@ -374,10 +374,11 @@ int main(int argc, char** argv) {
 			size_t iii = ii - (HistorySize - LocalHistorySize);
 			double fAngle = 2.0 * gfPi * fFreq * (double)iii / fSampleRate;
 			double fWindowFactor = DftWindow((double)iii / fLocalHistorySize);
-			DftMatrixCos[i * HistorySize + ii] =
-				(float)(cos(fAngle) * fWindowFactor / fLocalHistorySize);
-			DftMatrixSin[i * HistorySize + ii] =
-				(float)(sin(fAngle) * fWindowFactor / fLocalHistorySize);
+			double fNormalizeFactor =
+				fWindowFactor * fSensitivity /
+				(gfDftWindowNorm * fLocalHistorySize);
+			DftMatrixCos[i * HistorySize + ii] = (float)(cos(fAngle) * fNormalizeFactor);
+			DftMatrixSin[i * HistorySize + ii] = (float)(sin(fAngle) * fNormalizeFactor);
 		}
 	}
 	// Create matrix multiplication engine
@@ -509,15 +510,14 @@ int main(int argc, char** argv) {
 
 		MatrixMultCpu_Compute(pMatrixMultState, aSample, aOutputHeight);
 
-		// Normalize & apply rate filter
+		// Apply rate filter
 
 		// FIXME: This rate filter is not working very well
 		// to hide the noise caused by throwing away samples.
 		double fRate
-			 = 1.0 - exp(-(1.0 / 60.0) * log(1.0 / (1.0 - 0.99)) / fHistorySizeSec); // TODO: calculate FPS
+			= 1.0 - exp(-(1.0 / 60.0) * log(1.0 / (1.0 - 0.99)) / fHistorySizeSec); // TODO: calculate FPS
 
 		for (size_t i = 0; i < nBar; ++i) {
-			aOutputHeight[i] = (double)aOutputHeight[i] * gfDftWindowNorm * fSensitivity;
 			aOutputHeight[i] = fminf(aOutputHeight[i], 1.0f);
 			aOutputHeightOld[i] += fRate * (aOutputHeight[i] - aOutputHeightOld[i]);
 		}

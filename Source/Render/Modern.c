@@ -143,11 +143,8 @@ void* RenderModern_Init(
 		goto CleanupEnd;
 
 	pState->pWindow = pWindow;
-	int RealWindowW;
-	int RealWindowH;
-	SDL_GetWindowSizeInPixels(pWindow, &RealWindowW, &RealWindowH);
-	pState->WindowW = RealWindowW;
-	pState->WindowH = RealWindowH;
+	pState->WindowW = WindowW;
+	pState->WindowH = WindowH;
 
 	pState->nBar = nBar;
 	pState->fBarWidth = fBarWidth;
@@ -159,9 +156,10 @@ void* RenderModern_Init(
 
 	// temp
 	SDL_PropertiesID Props = SDL_CreateProperties();
-	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, true);
+	//SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, true);
 	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
 	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
+	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN, true);
 #if NDEBUG
 	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false);
 #else
@@ -351,13 +349,15 @@ void RenderModern_Render(void* pStateIn, const float* aOutput) {
 
 	//
 
+	uint32_t TextureW;
+	uint32_t TextureH;
 	SDL_GPUTexture* SwapchainTexture;
 	SDL_WaitAndAcquireGPUSwapchainTexture(
 		pCommandBuffer,
 		pState->pWindow,
 		&SwapchainTexture,
-		NULL,
-		NULL
+		&TextureW,
+		&TextureH
 	);
 
 	if (SwapchainTexture) {
@@ -404,8 +404,8 @@ void RenderModern_Render(void* pStateIn, const float* aOutput) {
 
 		cbv_parameter CbvParameter = {
 			{fBarColor[0], fBarColor[1], fBarColor[2], fBarColor[3]},
-			pState->fBarWidth / (float)pState->WindowW,
-			pState->fBarGap / (float)pState->WindowW
+			pState->fBarWidth / (float)TextureW,
+			pState->fBarGap / (float)TextureW
 		};
 		SDL_PushGPUVertexUniformData(
 			pCommandBuffer,
