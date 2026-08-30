@@ -208,11 +208,12 @@ int main(int argc, char** argv) {
 	//const double fFreqMax = 140;
 	//const size_t HistorySizeMs = 150;
 	const double fFreqMin = 25;
-	const double fFreqMax = 20000;
+	const double fFreqMax = 140;
 	const size_t HistorySizeMs = 150;
-	const double fSensitivity = 5.0;
-	const bool bLogScale = true;
+	const double fSensitivity = 7.5;
+	const bool bLogScale = false;
 	const bool bUniformMainLobe = true;
+	const bool bAlwaysOnTop = true;
 
 	// Stress test
 	//const size_t nBar = 1200;
@@ -249,6 +250,9 @@ int main(int argc, char** argv) {
 	}
 	if (!SDL_SetWindowHitTest(pWindow, HitTestCallback, NULL)) {
 		fprintf(stderr, "Unable to set window hit test callback: %s", SDL_GetError());
+	}
+	if (!SDL_SetWindowAlwaysOnTop(pWindow, bAlwaysOnTop)) {
+		fprintf(stderr, "Warning: Cannot bring the window on top.%s", SDL_GetError());
 	}
 
 	// Create renderer
@@ -293,7 +297,7 @@ int main(int argc, char** argv) {
 	// Build the DFT matrix
 
 	// TODO: Calculate minimum sample rate required.
-	const size_t SampleRate = 48000;//FreqMax * 12 / 5;
+	const size_t SampleRate = fFreqMax * 12 / 5;
 	const double fSampleRate = (double)SampleRate;
 	const size_t HistorySize = div_roundup(HistorySizeMs * SampleRate, 1000);
 	const double fHistorySize = (double)HistorySize;
