@@ -313,8 +313,8 @@ void* RenderModern_Init(
 	return NULL;
 }
 
-void RenderModern_Render(void* pStateIn, const float* aOutput) {
-	render_modern_state* pState = (render_modern_state*)pStateIn;
+void RenderModern_Render(void* pStateVoid, const float* aOutput) {
+	render_modern_state* pState = (render_modern_state*)pStateVoid;
 
 	// Copy bar height
 
@@ -425,8 +425,8 @@ void RenderModern_Render(void* pStateIn, const float* aOutput) {
 
 }
 
-void RenderModern_Destroy(void* pStateIn) {
-	render_modern_state* pState = (render_modern_state*)pStateIn;
+void RenderModern_Destroy(void* pStateVoid) {
+	render_modern_state* pState = (render_modern_state*)pStateVoid;
 	SDL_ReleaseGPUBuffer(pState->pDevice, pState->pVertexBuffer);
 	SDL_ReleaseGPUTransferBuffer(pState->pDevice, pState->pTransferBuffer);
 	SDL_ReleaseGPUBuffer(pState->pDevice, pState->pBarHeightBuffer);

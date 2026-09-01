@@ -8,8 +8,10 @@
 #include <miniaudio.h>
 #include <SDL3/SDL.h>
 
-#include <Common.h>
+#include <Arena.h>
 #include <Atomic.h>
+#include <Common.h>
+#include <Time.h>
 
 #define CACHE_LINE_SIZE 128
 
@@ -150,8 +152,8 @@ void* RenderLegacy_Init(
 	uint32_t BackgroundColor,
 	uint32_t BarColor
 );
-void RenderLegacy_Render(void* pStateIn, const float* aOutput);
-void RenderLegacy_Destroy(void* pStateIn);
+void RenderLegacy_Render(void* pStateVoid, const float* aOutput);
+void RenderLegacy_Destroy(void* pStateVoid);
 
 void* RenderModern_Init(
 	SDL_Window* pWindow,
@@ -163,8 +165,8 @@ void* RenderModern_Init(
 	uint32_t BackgroundColor,
 	uint32_t BarColor
 );
-void RenderModern_Render(void* pStateIn, const float* aOutput);
-void RenderModern_Destroy(void* pStateIn);
+void RenderModern_Render(void* pStateVoid, const float* aOutput);
+void RenderModern_Destroy(void* pStateVoid);
 
 void* MatrixMultCpu_Init(
 	size_t VectorSize,
@@ -179,8 +181,8 @@ void* MatrixMultCpu_Init(
 	float* DftMatrixCos,
 	float* DftMatrixSin
 );
-void MatrixMultCpu_Compute(void* pStateIn, const float* aSample, float* aOutput);
-void MatrixMultCpu_Destroy(void* pStateIn);
+void MatrixMultCpu_Compute(void* pStateVoid, const float* aSample, float* aOutput);
+void MatrixMultCpu_Destroy(void* pStateVoid);
 
 SDL_HitTestResult HitTestCallback(SDL_Window* Window, const SDL_Point* Point, void* Data) {
 	(void)Window;
@@ -210,10 +212,11 @@ int main(int argc, char** argv) {
 	const double fFreqMin = 25;
 	const double fFreqMax = 140;
 	const size_t HistorySizeMs = 150;
-	const double fSensitivity = 7.5;
+	const double fSensitivity = 3.0;
 	const bool bLogScale = false;
 	const bool bUniformMainLobe = true;
-	const bool bAlwaysOnTop = true;
+	const bool bEnergyEstimation = true;
+	const size_t DesiredSampleRate = 0;
 
 	// Stress test
 	//const size_t nBar = 1200;
@@ -229,6 +232,7 @@ int main(int argc, char** argv) {
 	const size_t WindowH = 400;
 	const uint32_t BackgroundColor = 0x0000007F;
 	const uint32_t BarColor = 0xFFFFFFFF;
+	const bool bAlwaysOnTop = true;
 
 	// Create SDL window
 
@@ -297,9 +301,12 @@ int main(int argc, char** argv) {
 	// Build the DFT matrix
 
 	// TODO: Calculate minimum sample rate required.
-	const size_t SampleRate = fFreqMax * 12 / 5;
+	const size_t SampleRate =
+		(DesiredSampleRate != 0) ?
+		DesiredSampleRate :
+		(size_t)(round(fFreqMax * 2.4));
 	const double fSampleRate = (double)SampleRate;
-	const size_t HistorySize = div_roundup(HistorySizeMs * SampleRate, 1000);
+	const size_t HistorySize = div_round(HistorySizeMs * SampleRate, 1000);
 	const double fHistorySize = (double)HistorySize;
 	const double fHistorySizeSec = fHistorySize / fSampleRate;
 
@@ -310,7 +317,7 @@ int main(int argc, char** argv) {
 	float* aOutputHeightOld;
 	float* DftMatrixCos;
 	float* DftMatrixSin;
-	aSample = malloc(
+	void* pArena = Arena_Create(
 		array_size(aSample, HistorySize) +
 		array_size(aSampleTemp, HistorySize) +
 		array_size(aOutputHeight, nBar) +
@@ -318,16 +325,18 @@ int main(int argc, char** argv) {
 		array_size(DftMatrixCos, nBar * HistorySize) +
 		array_size(DftMatrixSin, nBar * HistorySize)
 	);
-	if (aSample == NULL) {
+	if (pArena == NULL) {
 		fprintf(stderr, "Unable to allocate DFT matrix.\n");
 		Result = -1;
 		goto CleanupRenderer;
 	}
-	aSampleTemp = &aSample[HistorySize];
-	aOutputHeight = &aSampleTemp[HistorySize];
-	aOutputHeightOld = &aOutputHeight[nBar];
-	DftMatrixCos = &aOutputHeightOld[nBar];
-	DftMatrixSin = &DftMatrixCos[nBar * HistorySize];
+	size_t ArenaCounter = 0;
+	aSample = Arena_Push(pArena, &ArenaCounter, array_size(aSample, HistorySize));
+	aSampleTemp = Arena_Push(pArena, &ArenaCounter, array_size(aSampleTemp, HistorySize));
+	aOutputHeight = Arena_Push(pArena, &ArenaCounter, array_size(aOutputHeight, nBar));
+	aOutputHeightOld = Arena_Push(pArena, &ArenaCounter, array_size(aOutputHeightOld, nBar));
+	DftMatrixCos = Arena_Push(pArena, &ArenaCounter, array_size(DftMatrixCos, nBar * HistorySize));
+	DftMatrixSin = Arena_Push(pArena, &ArenaCounter, array_size(DftMatrixSin, nBar * HistorySize));
 
 	for (size_t i = 0; i < nBar; ++i) {
 		// MainLobe = gfDftWindowMainLobe / fHistorySizeSec
@@ -353,23 +362,24 @@ int main(int argc, char** argv) {
 		else
 			fFreq = fFreqMin + (fFreqMax - fFreqMin) * ((double)i / (fnBar - 1.0));
 
-		double FrequencyGap;
+		double fFrequencyGap; // Bandwith
 		if (bLogScale)
-			FrequencyGap = fFreq * (pow(fFreqMax / fFreqMin, 1.0 / (fnBar - 1.0)) - 1.0);
+			fFrequencyGap = fFreq * (pow(fFreqMax / fFreqMin, 1.0 / (fnBar - 1.0)) - 1.0);
 		else
-			FrequencyGap = (fFreqMax - fFreqMin) / fnBar;
+			fFrequencyGap = (fFreqMax - fFreqMin) / fnBar;
 		size_t MaxLocalHistorySize =
-			(size_t)(fSampleRate * gfDftWindowMainLobe * gfSincIntegral / FrequencyGap);
+			(size_t)(round(fSampleRate * gfDftWindowMainLobe * gfSincIntegral / fFrequencyGap));
 
 		size_t LocalHistorySize;
 		if (bLogScale && bUniformMainLobe)
-			LocalHistorySize = (size_t)(fHistorySize * (fFreqMin / fFreq));
+			LocalHistorySize = (size_t)(round(fHistorySize * (fFreqMin / fFreq)));
 		else
 			LocalHistorySize = HistorySize;
 
 		LocalHistorySize = min_macro(LocalHistorySize, MaxLocalHistorySize);
 		double fLocalHistorySize = (double)LocalHistorySize;
 
+		// TODO: Dynamic vector size to reduce resource consumption
 		for (size_t ii = 0; ii < HistorySize - LocalHistorySize; ++ii) {
 			DftMatrixCos[i * HistorySize + ii] = 0.0f;
 			DftMatrixSin[i * HistorySize + ii] = 0.0f;
@@ -381,6 +391,8 @@ int main(int argc, char** argv) {
 			double fNormalizeFactor =
 				fWindowFactor * fSensitivity /
 				(gfDftWindowNorm * fLocalHistorySize);
+			if (bEnergyEstimation)
+				fNormalizeFactor *= fFrequencyGap * (fLocalHistorySize / fHistorySize);
 			DftMatrixCos[i * HistorySize + ii] = (float)(cos(fAngle) * fNormalizeFactor);
 			DftMatrixSin[i * HistorySize + ii] = (float)(sin(fAngle) * fNormalizeFactor);
 		}
@@ -485,6 +497,9 @@ int main(int argc, char** argv) {
 	memset(aSample, 0, array_size(aSample, HistorySize));
 	memset(aSampleTemp, 0, array_size(aSampleTemp, HistorySize));
 	memset(aOutputHeightOld, 0, array_size(aOutputHeightOld, nBar));
+	uint64_t Second = clock64_resolution();
+	double fSecond = (double)Second;
+	uint64_t TimeLastFrame = 0;
 	while (true) {
 		SDL_Event Event;
 		while (SDL_PollEvent(&Event)) {
@@ -518,8 +533,16 @@ int main(int argc, char** argv) {
 
 		// FIXME: This rate filter is not working very well
 		// to hide the noise caused by throwing away samples.
-		double fRate
-			= 1.0 - exp(-(1.0 / 60.0) * log(1.0 / (1.0 - 0.99)) / fHistorySizeSec); // TODO: calculate FPS
+		uint64_t TimeCurrent = clock64();
+		double fRate;
+		if (TimeLastFrame == 0)
+			fRate = 1.0;
+		else
+			fRate = 1.0 - exp(
+				-(double)(TimeCurrent - TimeLastFrame) / fSecond *
+				log(1.0 / (1.0 - 0.99)) /
+				fHistorySizeSec
+			);
 
 		for (size_t i = 0; i < nBar; ++i) {
 			aOutputHeight[i] = fminf(aOutputHeight[i], 1.0f);
@@ -531,6 +554,8 @@ int main(int argc, char** argv) {
 			RenderLegacy_Render(pRenderState, aOutputHeightOld);
 		else if (RendererId == RendererId_Modern)
 			RenderModern_Render(pRenderState, aOutputHeightOld);
+
+		TimeLastFrame = TimeCurrent;
 	}
 	RenderEnd:
 
@@ -551,7 +576,7 @@ int main(int argc, char** argv) {
 	MatrixMultCpu_Destroy(pMatrixMultState);
 
 	CleanupDftMatrix:
-	free(aSample);
+	Arena_Destroy(pArena);
 
 	CleanupRenderer:
 	if (RendererId == RendererId_Legacy)

@@ -65,8 +65,8 @@ void* RenderLegacy_Init(
 	return pState;
 }
 
-void RenderLegacy_Render(void* pStateIn, const float* aOutput) {
-	render_legacy_state* pState = (render_legacy_state*)pStateIn;
+void RenderLegacy_Render(void* pStateVoid, const float* aOutput) {
+	render_legacy_state* pState = (render_legacy_state*)pStateVoid;
 	SDL_SetRenderDrawColor(
 		pState->pRenderer,
 		(uint8_t)(pState->BackgroundColor >> 24),
@@ -96,8 +96,8 @@ void RenderLegacy_Render(void* pStateIn, const float* aOutput) {
 	SDL_RenderPresent(pState->pRenderer);
 }
 
-void RenderLegacy_Destroy(void* pStateIn) {
-	render_legacy_state* pState = (render_legacy_state*)pStateIn;
+void RenderLegacy_Destroy(void* pStateVoid) {
+	render_legacy_state* pState = (render_legacy_state*)pStateVoid;
 	free(pState->aRectangle);
 	SDL_DestroyRenderer(pState->pRenderer);
 	free(pState);

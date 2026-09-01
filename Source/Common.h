@@ -9,6 +9,7 @@
 #define sizeof_member(type, member) (sizeof(((type*)0)->member))
 #define array_size(a, n) (sizeof((a)[0]) * (n))
 #define div_roundup(A, B) ((A) / (B) + ((A) % (B) != 0))
+#define div_round(A, B) ((A) / (B) + ((A) % (B) >= ((B) / 2 + (B) % 2)))
 #define min_macro(A, B) ((A) < (B) ? (A) : (B))
 #define max_macro(A, B) ((A) > (B) ? (A) : (B))
 
