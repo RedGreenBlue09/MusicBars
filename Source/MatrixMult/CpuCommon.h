@@ -14,7 +14,7 @@ typedef struct {
 	matrix_mult_cpu_compute* pCompute;
 } matrix_mult_cpu_state;
 
-void MatrixMultCpu_Detect(void* pStateVoid);
+void MatrixMultCpu_Detect(matrix_mult_cpu_state* pState);
 
 void MatrixMultCpu_ComputeSse(void* pState, const float* aSample, float* aOutput);
 void MatrixMultCpu_ComputeAvx(void* pState, const float* aSample, float* aOutput);

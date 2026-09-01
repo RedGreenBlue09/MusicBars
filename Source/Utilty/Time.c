@@ -1,10 +1,10 @@
 
 #include <stdint.h>
 
-#include <Machine.h>
-#include <IntMath.h>
+#include <Utilty/Machine.h>
+#include <Utilty/IntMath.h>
 
-#ifdef OS_WINDOWS
+#if OS_WINDOWS
 #include <Windows.h>
 #elif OS_UNIX
 #include <time.h>
@@ -13,7 +13,7 @@
 
 static uint64_t ClockRes = 0; // Fixme: Multi-thread
 
-#ifdef OS_WINDOWS
+#if OS_WINDOWS
 
 uint64_t clock64() {
 	LARGE_INTEGER TimeStruct;
@@ -50,7 +50,7 @@ uint64_t clock64_resolution() {
 #endif
 
 
-#ifdef OS_WINDOWS
+#if OS_WINDOWS
 
 NTSYSAPI NTSTATUS NTAPI NtQueryTimerResolution(
 	OUT PULONG MinimumResolution,

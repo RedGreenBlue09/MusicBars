@@ -1,7 +1,7 @@
 #include <stdint.h>
 
 #include "CpuCommon.h"
-#include <Machine.h>
+#include <Utilty/Machine.h>
 
 #if COMPILER_HAS_SSE
 
@@ -16,8 +16,6 @@
 #ifdef OS_WINDOWS
 #include <Windows.h>
 #endif
-
-void MatrixMultCpu_ComputeScalar(void* pStateVoid, const float* aSample, float* aOutput);
 
 void MatrixMultCpu_Detect(matrix_mult_cpu_state* pState) {
 	bool bUseSse = false;

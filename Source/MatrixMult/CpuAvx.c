@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 #include "CpuCommon.h"
-#include "Machine.h"
+#include <Utilty/Machine.h>
 
 #if COMPILER_HAS_AVX
 

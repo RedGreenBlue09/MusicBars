@@ -1,17 +1,18 @@
 
-#include <math.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-
 #include <SDL3/SDL.h>
-#include <SDL3_shadercross/SDL_shadercross.h>
 
-#include <Common.h>
+#include <stddef.h>
+#include <stdint.h>
 
+#if MUSICBARS_ENABLE_MODERN_SHADERS
+
+#include <math.h>
 #include <stdalign.h>
 #include <stdio.h>
+
+#include <SDL3_shadercross/SDL_shadercross.h>
+
+#include <Utilty/Common.h>
 
 typedef struct {
 	alignas(256) float BarColor[4];
@@ -160,11 +161,11 @@ void* RenderModern_Init(
 	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
 	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
 	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN, true);
-#if NDEBUG
+	#if NDEBUG
 	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, false);
-#else
+	#else
 	SDL_SetBooleanProperty(Props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, true);
-#endif
+	#endif
 	pState->pDevice = SDL_CreateGPUDeviceWithProperties(Props);
 	SDL_DestroyProperties(Props);
 
@@ -435,3 +436,37 @@ void RenderModern_Destroy(void* pStateVoid) {
 	SDL_DestroyGPUDevice(pState->pDevice);
 	free(pState);
 }
+
+#else
+
+void* RenderModern_Init(
+	SDL_Window* pWindow,
+	size_t WindowW,
+	size_t WindowH,
+	size_t nBar,
+	float fBarWidth,
+	float fBarGap,
+	uint32_t BackgroundColor,
+	uint32_t BarColor
+) {
+	(void)pWindow;
+	(void)WindowW;
+	(void)WindowH;
+	(void)nBar;
+	(void)fBarWidth;
+	(void)fBarGap;
+	(void)BackgroundColor;
+	(void)BarColor;
+	return NULL;
+}
+
+void RenderModern_Render(void* pStateVoid, const float* aOutput) {
+	(void)pStateVoid;
+	(void)aOutput;
+}
+
+void RenderModern_Destroy(void* pStateVoid) {
+	(void)pStateVoid;
+}
+
+#endif

@@ -8,10 +8,10 @@
 #include <miniaudio.h>
 #include <SDL3/SDL.h>
 
-#include <Arena.h>
-#include <Atomic.h>
-#include <Common.h>
-#include <Time.h>
+#include <Utilty/Arena.h>
+#include <Utilty/Atomic.h>
+#include <Utilty/Common.h>
+#include <Utilty/Time.h>
 
 #define CACHE_LINE_SIZE 128
 
@@ -546,7 +546,7 @@ int main(int argc, char** argv) {
 
 		for (size_t i = 0; i < nBar; ++i) {
 			aOutputHeight[i] = fminf(aOutputHeight[i], 1.0f);
-			aOutputHeightOld[i] += fRate * (aOutputHeight[i] - aOutputHeightOld[i]);
+			aOutputHeightOld[i] += (float)fRate * (aOutputHeight[i] - aOutputHeightOld[i]);
 		}
 
 		// Render

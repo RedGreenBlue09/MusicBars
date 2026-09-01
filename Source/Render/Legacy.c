@@ -7,9 +7,8 @@
 
 #include <SDL3/SDL.h>
 
-#include <Common.h>
+#include <Utilty/Common.h>
 
-#include <stdio.h>
 // SDL_Renderer-based
 
 typedef struct {
