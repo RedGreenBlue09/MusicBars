@@ -31,7 +31,8 @@ void* RenderLegacy_Init(
 	float fBarWidth,
 	float fBarGap,
 	uint32_t BackgroundColor,
-	uint32_t BarColor
+	uint32_t BarColor,
+	bool bConnectedBars
 ) {
 	render_legacy_state* pState = malloc(sizeof(*pState));
 	if (pState == NULL)
@@ -44,6 +45,8 @@ void* RenderLegacy_Init(
 	pState->fBarGap = fBarGap;
 	pState->BackgroundColor = BackgroundColor;
 	pState->BarColor = BarColor;
+	(void)bConnectedBars;
+	// No connected bars for now
 
 	SDL_Renderer* pRenderer = SDL_CreateRenderer(pWindow, NULL);
 	if (pRenderer == NULL) {
@@ -64,7 +67,7 @@ void* RenderLegacy_Init(
 	return pState;
 }
 
-void RenderLegacy_Render(void* pStateVoid, const float* aOutput) {
+void RenderLegacy_Render(void* pStateVoid, const float* aBarHeight) {
 	render_legacy_state* pState = (render_legacy_state*)pStateVoid;
 	SDL_SetRenderDrawColor(
 		pState->pRenderer,
@@ -75,7 +78,7 @@ void RenderLegacy_Render(void* pStateVoid, const float* aOutput) {
 	);
 	SDL_RenderClear(pState->pRenderer);
 	for (size_t i = 0; i < pState->nBar; ++i) {
-		float BarHeight = aOutput[i] * (float)pState->WindowH;
+		float BarHeight = aBarHeight[i] * (float)pState->WindowH;
 		BarHeight = fmaxf(BarHeight, 1.0f);
 		pState->aRectangle[i] = (SDL_FRect){
 			.x = (float)i * (pState->fBarWidth + pState->fBarGap),

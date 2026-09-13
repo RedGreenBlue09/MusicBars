@@ -150,9 +150,13 @@ void* RenderLegacy_Init(
 	float fBarWidth,
 	float fBarGap,
 	uint32_t BackgroundColor,
-	uint32_t BarColor
+	uint32_t BarColor,
+	bool bConnectedBars
 );
-void RenderLegacy_Render(void* pStateVoid, const float* aOutput);
+void RenderLegacy_Render(
+	void* pStateVoid,
+	const float* aBarHeight
+);
 void RenderLegacy_Destroy(void* pStateVoid);
 
 void* RenderModern_Init(
@@ -163,9 +167,13 @@ void* RenderModern_Init(
 	float fBarWidth,
 	float fBarGap,
 	uint32_t BackgroundColor,
-	uint32_t BarColor
+	uint32_t BarColor,
+	bool bConnectedBars
 );
-void RenderModern_Render(void* pStateVoid, const float* aOutput);
+void RenderModern_Render(
+	void* pStateVoid,
+	const float* aBarHeight
+);
 void RenderModern_Destroy(void* pStateVoid);
 
 void* MatrixMultCpu_Init(
@@ -210,9 +218,9 @@ int main(int argc, char** argv) {
 	//const double fFreqMax = 140;
 	//const size_t HistorySizeMs = 150;
 	const double fFreqMin = 25;
-	const double fFreqMax = 140;
+	const double fFreqMax = 250;
 	const size_t HistorySizeMs = 150;
-	const double fSensitivity = 3.0;
+	const double fSensitivity = 2.0;
 	const bool bLogScale = false;
 	const bool bUniformMainLobe = true;
 	const bool bEnergyEstimation = true;
@@ -223,15 +231,19 @@ int main(int argc, char** argv) {
 	//const float fBarGap = 0.0f;
 	//const float fBarWidth = 1.0f;
 
+	//const size_t nBar = 80;
+	//const float fBarGap = 5.0f;
+	//const float fBarWidth = 10.0f;
 	const size_t nBar = 80;
-	const float fBarGap = 5.0f;
-	const float fBarWidth = 10.0f;
+	const float fBarGap = 0.0f;
+	const float fBarWidth = 15.0f;
 	const double fnBar = (double)nBar;
 	const size_t WindowW =
 		(size_t)(fnBar * fBarWidth + (fnBar - 1.0) * fBarGap);
 	const size_t WindowH = 400;
 	const uint32_t BackgroundColor = 0x0000007F;
 	const uint32_t BarColor = 0xFFFFFFFF;
+	const bool bConnectedBars = true;
 	const bool bAlwaysOnTop = true;
 
 	// Create SDL window
@@ -245,7 +257,7 @@ int main(int argc, char** argv) {
 		"MusicBars",
 		(int)WindowW, // TODO: set size to 1 and let the renderer cook
 		(int)WindowH,
-		SDL_WINDOW_BORDERLESS | SDL_WINDOW_TRANSPARENT
+		SDL_WINDOW_BORDERLESS// | SDL_WINDOW_TRANSPARENT
 	); // DX12 GPU renderer does not work with TRANSPARENT yet. Waiting on SDL...
 	if (!pWindow) {
 		fprintf(stderr, "Unable to create the window: %s", SDL_GetError());
@@ -271,7 +283,8 @@ int main(int argc, char** argv) {
 			fBarWidth,
 			fBarGap,
 			BackgroundColor,
-			BarColor
+			BarColor,
+			bConnectedBars
 		);
 		if (pRenderState != NULL) {
 			RendererId = RendererId_Modern;
@@ -286,7 +299,8 @@ int main(int argc, char** argv) {
 			fBarWidth,
 			fBarGap,
 			BackgroundColor,
-			BarColor
+			BarColor,
+			bConnectedBars
 		);
 		if (pRenderState != NULL) {
 			RendererId = RendererId_Legacy;
@@ -331,12 +345,12 @@ int main(int argc, char** argv) {
 		goto CleanupRenderer;
 	}
 	size_t ArenaCounter = 0;
-	aSample = Arena_Push(pArena, &ArenaCounter, array_size(aSample, HistorySize));
-	aSampleTemp = Arena_Push(pArena, &ArenaCounter, array_size(aSampleTemp, HistorySize));
-	aOutputHeight = Arena_Push(pArena, &ArenaCounter, array_size(aOutputHeight, nBar));
+	aSample          = Arena_Push(pArena, &ArenaCounter, array_size(aSample, HistorySize));
+	aSampleTemp      = Arena_Push(pArena, &ArenaCounter, array_size(aSampleTemp, HistorySize));
+	aOutputHeight    = Arena_Push(pArena, &ArenaCounter, array_size(aOutputHeight, nBar));
 	aOutputHeightOld = Arena_Push(pArena, &ArenaCounter, array_size(aOutputHeightOld, nBar));
-	DftMatrixCos = Arena_Push(pArena, &ArenaCounter, array_size(DftMatrixCos, nBar * HistorySize));
-	DftMatrixSin = Arena_Push(pArena, &ArenaCounter, array_size(DftMatrixSin, nBar * HistorySize));
+	DftMatrixCos     = Arena_Push(pArena, &ArenaCounter, array_size(DftMatrixCos, nBar * HistorySize));
+	DftMatrixSin     = Arena_Push(pArena, &ArenaCounter, array_size(DftMatrixSin, nBar * HistorySize));
 
 	for (size_t i = 0; i < nBar; ++i) {
 		// MainLobe = gfDftWindowMainLobe / fHistorySizeSec
@@ -386,13 +400,13 @@ int main(int argc, char** argv) {
 		}
 		for (size_t ii = HistorySize - LocalHistorySize; ii < HistorySize; ++ii) {
 			size_t iii = ii - (HistorySize - LocalHistorySize);
-			double fAngle = 2.0 * gfPi * fFreq * (double)iii / fSampleRate;
-			double fWindowFactor = DftWindow((double)iii / fLocalHistorySize);
+			double fAngle = 2.0 * gfPi * fFreq * ((double)iii + 0.5) / fSampleRate;
+			double fWindowFactor = DftWindow(((double)iii + 0.5) / fLocalHistorySize);
 			double fNormalizeFactor =
 				fWindowFactor * fSensitivity /
 				(gfDftWindowNorm * fLocalHistorySize);
 			if (bEnergyEstimation)
-				fNormalizeFactor *= fFrequencyGap * (fLocalHistorySize / fHistorySize);
+				fNormalizeFactor *= (fFrequencyGap) * (fLocalHistorySize / fHistorySize);
 			DftMatrixCos[i * HistorySize + ii] = (float)(cos(fAngle) * fNormalizeFactor);
 			DftMatrixSin[i * HistorySize + ii] = (float)(sin(fAngle) * fNormalizeFactor);
 		}
@@ -408,7 +422,7 @@ int main(int argc, char** argv) {
 	if (pMatrixMultState == NULL) {
 		fprintf(stderr, "Unable to initialize the matrix multiplication engine.\n");
 		Result = -1;
-		goto CleanupDftMatrix;
+		goto CleanupArena;
 	}
 
 	// Initialize the audio queue
@@ -528,15 +542,17 @@ int main(int argc, char** argv) {
 		// Matrix multiplication
 
 		MatrixMultCpu_Compute(pMatrixMultState, aSample, aOutputHeight);
-
+		
 		// Apply rate filter
 
 		// FIXME: This rate filter is not working very well
 		// to hide the noise caused by throwing away samples.
+		// A way to fix this is to use frequency domain averaging
+		// with weights that look like the main lobe.
 		uint64_t TimeCurrent = clock64();
-		double fRate;
+		float fRate;
 		if (TimeLastFrame == 0)
-			fRate = 1.0;
+			fRate = 1.0f;
 		else
 			fRate = 1.0 - exp(
 				-(double)(TimeCurrent - TimeLastFrame) / fSecond *
@@ -546,7 +562,7 @@ int main(int argc, char** argv) {
 
 		for (size_t i = 0; i < nBar; ++i) {
 			aOutputHeight[i] = fminf(aOutputHeight[i], 1.0f);
-			aOutputHeightOld[i] += (float)fRate * (aOutputHeight[i] - aOutputHeightOld[i]);
+			aOutputHeightOld[i] += fRate * (aOutputHeight[i] - aOutputHeightOld[i]);
 		}
 
 		// Render
@@ -575,7 +591,7 @@ int main(int argc, char** argv) {
 	CleanupMatrixMult:
 	MatrixMultCpu_Destroy(pMatrixMultState);
 
-	CleanupDftMatrix:
+	CleanupArena:
 	Arena_Destroy(pArena);
 
 	CleanupRenderer:
