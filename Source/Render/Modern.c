@@ -64,6 +64,7 @@ typedef struct {
 	float ScreenWidthInv;
 } connected_cbv_parameter;
 
+// FIXME: The last column is empty
 static const char ConnectedVertexShaderString[] =
 	"struct vertex_output {"
 	"    float4 Position : SV_Position;"
@@ -102,7 +103,7 @@ static const char ConnectedVertexShaderString[] =
 	"	float X = ScreenWidthInv * (float)Column;"
 	""
 	"	float fiBar = X * (float)(nBar - 1);"
-	"	int iBar = (int)fiBar;"
+	"	uint iBar = (uint)fiBar;"
 	"	float LocalDist = fiBar - floor(fiBar);"
 	"	"
 	"	float Y0 = GetBarHeight(iBar);"

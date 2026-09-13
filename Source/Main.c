@@ -242,7 +242,7 @@ int main(int argc, char** argv) {
 		(size_t)(fnBar * fBarWidth + (fnBar - 1.0) * fBarGap);
 	const size_t WindowH = 400;
 	const uint32_t BackgroundColor = 0x0000007F;
-	const uint32_t BarColor = 0xFFFFFFFF;
+	const uint32_t BarColor = 0xFFFFFF7F;
 	const bool bConnectedBars = true;
 	const bool bAlwaysOnTop = true;
 
