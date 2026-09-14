@@ -7,7 +7,8 @@
 
 #include <SDL3/SDL.h>
 
-#include <Utilty/Common.h>
+#include "Utilty/Common.h"
+#include "Render/RendererCommon.h"
 
 // SDL_Renderer-based
 
@@ -19,6 +20,8 @@ typedef struct {
 	float fBarGap;
 	uint32_t BackgroundColor;
 	uint32_t BarColor;
+	float fMinimumBarHeight;
+	float fVerticalOffset;
 	bool bConnectedBars;
 
 	SDL_Renderer* pRenderer;
@@ -27,39 +30,39 @@ typedef struct {
 
 void* RenderLegacy_Init(
 	SDL_Window* pWindow,
-	size_t WindowW,
-	size_t WindowH,
-	size_t nBar,
-	float fBarWidth,
-	float fBarGap,
-	uint32_t BackgroundColor,
-	uint32_t BarColor,
-	bool bConnectedBars
+	renderer_config* pConfig
 ) {
 	render_legacy_state* pState = malloc(sizeof(*pState));
-	if (pState == NULL)
+	if (pState == NULL) {
+		fprintf(stderr, "Error:	Failed to allocate render state.\n");
 		return NULL;
+	}
 
-	pState->WindowW = WindowW;
-	pState->WindowH = WindowH;
-	pState->nBar = nBar;
-	pState->fBarWidth = fBarWidth;
-	pState->fBarGap = fBarGap;
-	pState->BackgroundColor = BackgroundColor;
-	pState->BarColor = BarColor;
-	pState->bConnectedBars = bConnectedBars;
+	pState->WindowW = pConfig->WindowW;
+	pState->WindowH = pConfig->WindowH;
+	pState->nBar = pConfig->nBar;
+	pState->fBarWidth = pConfig->fBarWidth;
+	pState->fBarGap = pConfig->fBarGap;
+	pState->BackgroundColor = pConfig->BackgroundColor;
+	pState->BarColor = pConfig->BarColor;
+	pState->fMinimumBarHeight = pConfig->fMinimumBarHeight;
+	pState->fVerticalOffset = pConfig->fVerticalOffset;
+	pState->bConnectedBars = pConfig->bConnectedBars;
 
 	SDL_Renderer* pRenderer = SDL_CreateRenderer(pWindow, NULL);
 	if (pRenderer == NULL) {
+		fprintf(stderr, "Error: Failed to create SDL_Renderer: %s\n", SDL_GetError());
 		free(pState);
 		return NULL;
 	}
-	SDL_SetRenderVSync(pRenderer, 1); // This adds a LOT of latency. TODO: Configurable
+
+	SDL_SetRenderVSync(pRenderer, pConfig->bVsync);
 	pState->pRenderer = pRenderer;
 
-	if (!bConnectedBars) {
-		SDL_FRect* aRectangle = malloc(array_size(aRectangle, nBar));
+	if (!pState->bConnectedBars) {
+		SDL_FRect* aRectangle = malloc(array_size(aRectangle, pState->nBar));
 		if (aRectangle == NULL) {
+			fprintf(stderr, "Error: Failed to allocate rectangle array\n");
 			SDL_DestroyRenderer(pRenderer);
 			free(pState);
 			return NULL;
@@ -72,9 +75,9 @@ void* RenderLegacy_Init(
 
 static float HermiteEval(float Y0, float Y1, float M0, float M1, float T) {
 	float T2 = T * T, T3 = T2 * T;
-	float H00 = 2.0 * T3 + (-3.0 * T2 + 1.0);
-	float H10 = T3 - 2.0 * T2 + T;
-	float H01 = -2.0 * T3 + 3.0 * T2;
+	float H00 = 2.0f * T3 + (-3.0f * T2 + 1.0f);
+	float H10 = T3 - 2.0f * T2 + T;
+	float H01 = -2.0f * T3 + 3.0f * T2;
 	float H11 = T3 - T2;
 	return Y0 * H00 + M0 * H10 + Y1 * H01 + M1 * H11;
 }
@@ -107,10 +110,11 @@ void RenderLegacy_Render(void* pStateVoid, const float* aBarHeight) {
 
 	if (pState->bConnectedBars) {
 
-		float fScreenWidthInv = 1.0f / (float)pState->WindowW;
+		float fWindowWInv = 1.0f / (float)pState->WindowW;
+		float fWindowHInv = 1.0f / (float)pState->WindowH;
 		for (size_t i = 0; i < pState->WindowW; ++i) {
 			
-			float fiBar = (float)i * fScreenWidthInv * (float)(nBar - 1);
+			float fiBar = (float)i * fWindowWInv * (float)(nBar - 1);
 			size_t iBar = (size_t)fiBar;
 			float LocalDist = fiBar - floor(fiBar);
 
@@ -119,6 +123,8 @@ void RenderLegacy_Render(void* pStateVoid, const float* aBarHeight) {
 			float M0 = Tangent(aBarHeight, nBar, iBar);
 			float M1 = Tangent(aBarHeight, nBar, iBar + 1);
 			float Y = HermiteEval(Y0, Y1, M0, M1, LocalDist);
+			Y = fmaxf(Y, pState->fMinimumBarHeight * fWindowHInv);
+			Y += pState->fVerticalOffset * fWindowHInv;
 
 			Y = SDL_clamp(Y, 0.0f, 1.0f);
 			SDL_RenderLine(
@@ -135,7 +141,8 @@ void RenderLegacy_Render(void* pStateVoid, const float* aBarHeight) {
 
 		for (size_t i = 0; i < nBar; ++i) {
 			float BarHeight = aBarHeight[i] * (float)pState->WindowH;
-			BarHeight = fmaxf(BarHeight, 1.0f);
+			BarHeight = fmaxf(BarHeight, pState->fMinimumBarHeight);
+			BarHeight += pState->fVerticalOffset;
 			pState->aRectangle[i] = (SDL_FRect){
 				.x = (float)i * (pState->fBarWidth + pState->fBarGap),
 				.y = (float)pState->WindowH - BarHeight,

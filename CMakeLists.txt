@@ -16,28 +16,14 @@ endmacro()
 
 project(MusicBars LANGUAGES C)
 
-set(MUSICBARS_SSE_COMPILE_FLAG "")
-set(MUSICBARS_AVX_COMPILE_FLAG "")
-set(MUSICBARS_FMA3_COMPILE_FLAG "")
-set(MUSICBARS_NEON_COMPILE_FLAG "")
-set(MUSICBARS_NEON_FMA_COMPILE_FLAG "")
-if (MSVC)
-	set(MUSICBARS_AVX_COMPILE_FLAG "/arch:AVX")
-	set(MUSICBARS_FMA3_COMPILE_FLAG "/arch:AVX2")
-	set(MUSICBARS_NEON_FMA_COMPILE_FLAG "/arch:VFPv4")
-elseif (CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
-	set(MUSICBARS_SSE_COMPILE_FLAG "-msse")
-	set(MUSICBARS_AVX_COMPILE_FLAG "-mavx")
-	set(MUSICBARS_FMA3_COMPILE_FLAG "-mfma")
-	set(MUSICBARS_NEON_COMPILE_FLAG "-mfpu=neon")
-	set(MUSICBARS_NEON_FMA_COMPILE_FLAG "-mfpu=vfpv4")
-endif()
+# Options
 
 option(MUSICBARS_ENABLE_SSE "Enable SSE vectorization" OFF)
 option(MUSICBARS_ENABLE_AVX "Enable AVX vectorization" OFF)
 option(MUSICBARS_ENABLE_FMA3 "Enable AVX FMA3 vectorization" OFF)
 option(MUSICBARS_ENABLE_NEON "Enable NEON vectorization" OFF)
 option(MUSICBARS_ENABLE_NEON_FMA "Enable NEON FMA vectorization" OFF)
+
 if (MUSICBARS_ENABLE_FMA3)
 	set(MUSICBARS_ENABLE_AVX ON)
 	set(MUSICBARS_ENABLE_SSE ON)
@@ -54,23 +40,10 @@ message(MUSICBARS_ENABLE_FMA3=${MUSICBARS_ENABLE_FMA3})
 message(MUSICBARS_ENABLE_NEON=${MUSICBARS_ENABLE_NEON})
 message(MUSICBARS_ENABLE_NEON_FMA=${MUSICBARS_ENABLE_NEON_FMA})
 
-if (NOT MUSICBARS_ENABLE_SSE)
-	set(MUSICBARS_SSE_COMPILE_FLAG "")
-endif()
-if (NOT MUSICBARS_ENABLE_AVX)
-	set(MUSICBARS_AVX_COMPILE_FLAG "")
-endif()
-if (NOT MUSICBARS_ENABLE_FMA3)
-	set(MUSICBARS_FMA3_COMPILE_FLAG "")
-endif()
-if (NOT MUSICBARS_ENABLE_NEON)
-	set(MUSICBARS_NEON_COMPILE_FLAG "")
-endif()
-if (NOT MUSICBARS_ENABLE_NEON_FMA)
-	set(MUSICBARS_NEON_FMA_COMPILE_FLAG "")
-endif()
-
 option(MUSICBARS_ENABLE_MODERN_SHADERS "Build with modern shaders support" ON)
+message(MUSICBARS_ENABLE_MODERN_SHADERS=${MUSICBARS_ENABLE_MODERN_SHADERS})
+
+# Libraries
 
 add_subdirectory("${MusicBars_SOURCE_DIR}/Library/miniaudio")
 set_target_properties(miniaudio PROPERTIES
@@ -79,6 +52,16 @@ set_target_properties(miniaudio PROPERTIES
 
 set(SDL_STATIC ON)
 set(SDL_SHARED OFF)
+
+set(SDL_AUDIO OFF)
+set(SDL_CAMERA OFF)
+set(SDL_JOYSTICK OFF)
+set(SDL_HAPTIC OFF)
+set(SDL_HIDAPI OFF)
+set(SDL_POWER OFF)
+set(SDL_SENSOR OFF)
+set(SDL_DIALOG OFF)
+
 add_subdirectory("${MusicBars_SOURCE_DIR}/Library/SDL")
 set_target_properties(SDL3-static PROPERTIES
 	INTERPROCEDURAL_OPTIMIZATION TRUE
@@ -94,8 +77,13 @@ if (MUSICBARS_ENABLE_MODERN_SHADERS)
 	)
 endif()
 
+# Files
+
 set(MusicBars_HEADER_FILES
+	"${MusicBars_SOURCE_DIR}/Source/AudioCapture.h"
+	"${MusicBars_SOURCE_DIR}/Source/DftWindow.h"
 	"${MusicBars_SOURCE_DIR}/Source/MatrixMult/CpuCommon.h"
+	"${MusicBars_SOURCE_DIR}/Source/Render/RendererCommon.h"
 	"${MusicBars_SOURCE_DIR}/Source/Utilty/Arena.h"
 	"${MusicBars_SOURCE_DIR}/Source/Utilty/Atomic.h"
 	"${MusicBars_SOURCE_DIR}/Source/Utilty/Common.h"
@@ -104,6 +92,8 @@ set(MusicBars_HEADER_FILES
 	"${MusicBars_SOURCE_DIR}/Source/Utilty/Time.h"
 )
 set(MusicBars_SOURCE_FILES
+	"${MusicBars_SOURCE_DIR}/Source/AudioCapture.c"
+	"${MusicBars_SOURCE_DIR}/Source/DftWindow.c"
 	"${MusicBars_SOURCE_DIR}/Source/Main.c"
 	"${MusicBars_SOURCE_DIR}/Source/MatrixMult/Cpu.c"
 	"${MusicBars_SOURCE_DIR}/Source/MatrixMult/CpuAvx.c"
@@ -133,6 +123,41 @@ if (MINGW)
 	)
 endif()
 
+# ISA extension stuff
+
+set(MUSICBARS_SSE_COMPILE_FLAG "")
+set(MUSICBARS_AVX_COMPILE_FLAG "")
+set(MUSICBARS_FMA3_COMPILE_FLAG "")
+set(MUSICBARS_NEON_COMPILE_FLAG "")
+set(MUSICBARS_NEON_FMA_COMPILE_FLAG "")
+if (MSVC)
+	set(MUSICBARS_AVX_COMPILE_FLAG "/arch:AVX")
+	set(MUSICBARS_FMA3_COMPILE_FLAG "/arch:AVX2")
+	set(MUSICBARS_NEON_FMA_COMPILE_FLAG "/arch:VFPv4")
+elseif (CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+	set(MUSICBARS_SSE_COMPILE_FLAG "-msse")
+	set(MUSICBARS_AVX_COMPILE_FLAG "-mavx")
+	set(MUSICBARS_FMA3_COMPILE_FLAG "-mfma")
+	set(MUSICBARS_NEON_COMPILE_FLAG "-mfpu=neon")
+	set(MUSICBARS_NEON_FMA_COMPILE_FLAG "-mfpu=vfpv4")
+endif()
+
+if (NOT MUSICBARS_ENABLE_SSE)
+	set(MUSICBARS_SSE_COMPILE_FLAG "")
+endif()
+if (NOT MUSICBARS_ENABLE_AVX)
+	set(MUSICBARS_AVX_COMPILE_FLAG "")
+endif()
+if (NOT MUSICBARS_ENABLE_FMA3)
+	set(MUSICBARS_FMA3_COMPILE_FLAG "")
+endif()
+if (NOT MUSICBARS_ENABLE_NEON)
+	set(MUSICBARS_NEON_COMPILE_FLAG "")
+endif()
+if (NOT MUSICBARS_ENABLE_NEON_FMA)
+	set(MUSICBARS_NEON_FMA_COMPILE_FLAG "")
+endif()
+
 set(MUSICBARS_CPU_DETECTION_COMPILE_FLAG "")
 if (MUSICBARS_ENABLE_FMA3)
 	set(MUSICBARS_CPU_DETECTION_COMPILE_FLAG "${MUSICBARS_FMA3_COMPILE_FLAG}")
@@ -147,7 +172,6 @@ elseif (MUSICBARS_ENABLE_NEON)
 	set(MUSICBARS_CPU_DETECTION_COMPILE_FLAG "${MUSICBARS_NEON_COMPILE_FLAG}")
 endif()
 
-# Set per-file compiler flags for ISA-specific implementations
 set_source_files_properties("${MusicBars_SOURCE_DIR}/Source/MatrixMult/CpuDetection.c"
 	PROPERTIES COMPILE_OPTIONS "${MUSICBARS_CPU_DETECTION_COMPILE_FLAG}"
 )
@@ -167,11 +191,15 @@ set_source_files_properties("${MusicBars_SOURCE_DIR}/Source/MatrixMult/CpuNeonFm
 	PROPERTIES COMPILE_OPTIONS "${MUSICBARS_NEON_FMA_COMPILE_FLAG}"
 )
 
+# Definitions
+
 if (MUSICBARS_ENABLE_MODERN_SHADERS)
 	set_source_files_properties("${MusicBars_SOURCE_DIR}/Source/Render/Modern.c"
 		PROPERTIES COMPILE_DEFINITIONS "MUSICBARS_ENABLE_MODERN_SHADERS=1"
 	)
 endif()
+
+# Binary files
 
 add_executable(MusicBars
 	${MusicBars_HEADER_FILES}

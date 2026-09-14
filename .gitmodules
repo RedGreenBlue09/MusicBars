@@ -7,3 +7,6 @@
 [submodule "Library/SDL_shadercross"]
 	path = Library/SDL_shadercross
 	url = https://github.com/libsdl-org/SDL_shadercross
+[submodule "Library/iniparser"]
+	path = Library/iniparser
+	url = https://gitlab.com/iniparser/iniparser

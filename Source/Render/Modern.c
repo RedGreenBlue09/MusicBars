@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "Render/RendererCommon.h"
+
 #if MUSICBARS_ENABLE_MODERN_SHADERS
 
 #include <math.h>
@@ -12,49 +14,56 @@
 
 #include <SDL3_shadercross/SDL_shadercross.h>
 
-#include <Utilty/Common.h>
+#include "Utilty/Common.h"
 
 typedef struct {
 	alignas(256) float BarColor[4];
 	float BarWidth; // Relative ratio to screen size
 	float BarGap; // Relative ratio to screen size
+	float MinimumBarHeight; // Relative ratio to screen size
+	float VerticalOffset; // Relative ratio to screen size
 } cbv_parameter;
 
 static const char VertexShaderString[] =
 	"struct vertex_output {"
-	"    float4 Position : SV_Position;"
-	"    float4 Color    : COLOR0;"
+	"	float4 Position : SV_Position;"
+	"	float4 Color    : COLOR0;"
 	"};"
 	""
 	"StructuredBuffer<float4> aBarHeight : register(t0, space0);"
 	""
 	"cbuffer Params : register(b0, space1) {"
-	"    float4 BarColor;"
-	"    float BarWidth;"
-	"    float BarGap;"
+	"	float4 BarColor;"
+	"	float BarWidth;"
+	"	float BarGap;"
+	"	float MinimumBarHeight;"
+	"	float VerticalOffset;"
 	"};"
 	""
 	"vertex_output VertexMain(uint VertexId : SV_VertexID, uint InstanceId : SV_InstanceID) {"
-	"    float BarHeight = aBarHeight[InstanceId / 4][InstanceId % 4];"
-	"    "
-	"    float2 TopLeft = {(BarWidth + BarGap) * InstanceId, BarHeight};"
-	"    float2 TopRight = {(BarWidth + BarGap) * InstanceId + BarWidth, BarHeight};"
-	"    float2 BottomLeft = {(BarWidth + BarGap) * InstanceId, 0};"
-	"    float2 BottomRight = {(BarWidth + BarGap) * InstanceId + BarWidth, 0};"
-	"    static const float2 aVertexLookup[6] = {"
-	"        TopLeft,"
-	"        TopRight,"
-	"        BottomLeft,"
-	"        BottomLeft,"
-	"        TopRight,"
-	"        BottomRight"
-	"    };"
-	"    float2 Ndc = aVertexLookup[VertexId % 6];"
-	"    Ndc.x = Ndc.x * 2.0 - 1.0;"
-	"    Ndc.y = Ndc.y * 2.0 - 1.0;"
+	"	float BarHeight = aBarHeight[InstanceId / 4][InstanceId % 4];"
+	"	"
+	"	BarHeight = max(BarHeight, MinimumBarHeight);"
+	"	BarHeight += VerticalOffset;"
+	"	"
+	"	float2 TopLeft = {(BarWidth + BarGap) * InstanceId, BarHeight};"
+	"	float2 TopRight = {(BarWidth + BarGap) * InstanceId + BarWidth, BarHeight};"
+	"	float2 BottomLeft = {(BarWidth + BarGap) * InstanceId, 0};"
+	"	float2 BottomRight = {(BarWidth + BarGap) * InstanceId + BarWidth, 0};"
+	"	static const float2 aVertexLookup[6] = {"
+	"		TopLeft,"
+	"		TopRight,"
+	"		BottomLeft,"
+	"		BottomLeft,"
+	"		TopRight,"
+	"		BottomRight"
+	"	};"
+	"	float2 Ndc = aVertexLookup[VertexId % 6];"
+	"	Ndc.x = Ndc.x * 2.0 - 1.0;"
+	"	Ndc.y = Ndc.y * 2.0 - 1.0;"
 	""
-	"    vertex_output Output = {float4(Ndc, 0.0, 1.0), BarColor};"
-	"    return Output;"
+	"	vertex_output Output = {float4(Ndc, 0.0, 1.0), BarColor};"
+	"	return Output;"
 	"}"
 	"";
 
@@ -62,6 +71,8 @@ typedef struct {
 	alignas(256) float BarColor[4];
 	uint32_t nBar;
 	float ScreenWidthInv;
+	float MinimumBarHeight; // Relative ratio to screen size
+	float VerticalOffset; // Relative ratio to screen size
 } connected_cbv_parameter;
 
 // FIXME: The last column is empty
@@ -77,6 +88,8 @@ static const char ConnectedVertexShaderString[] =
 	"    float4 BarColor;"
 	"    uint   nBar;"
 	"    float  ScreenWidthInv;"
+	"	float MinimumBarHeight;"
+	"	float VerticalOffset;"
 	"};"
 	""
 	"float GetBarHeight(uint i) {"
@@ -112,6 +125,8 @@ static const char ConnectedVertexShaderString[] =
 	"	float M1 = Tangent(iBar + 1);"
 	"	"
 	"	float Y = HermiteEval(Y0, Y1, M0, M1, LocalDist);"
+	"	Y = max(Y, MinimumBarHeight);"
+	"	Y += VerticalOffset;"
 	"	"
 	"	Y = (VertexId % 2 == 0) ? Y : 0.0;"
 	"	float2 Ndc = float2(X * 2.0 - 1.0, Y * 2.0 - 1.0);"
@@ -150,8 +165,10 @@ static SDL_GPUShader* CompileShaderFromHlsl(
 	size_t ShaderSpirvSize;
 	void* pShaderSpirv =
 		SDL_ShaderCross_CompileSPIRVFromHLSL(&ShaderInfo, &ShaderSpirvSize);
-	if (pShaderSpirv == NULL)
+	if (pShaderSpirv == NULL) {
+		fprintf(stderr, "Unable to compile shader to SPIRV: %s\n", SDL_GetError());
 		return NULL;
+	}
 
 	SDL_ShaderCross_GraphicsShaderMetadata* pShaderMetadata =
 		SDL_ShaderCross_ReflectGraphicsSPIRV(pShaderSpirv, ShaderSpirvSize, 0);
@@ -168,6 +185,9 @@ static SDL_GPUShader* CompileShaderFromHlsl(
 		&pShaderMetadata->resource_info,
 		ShaderInfo.props
 	);
+	if (pShader == NULL)
+		fprintf(stderr, "Unable to compile shader: %s\n", SDL_GetError());
+
 	SDL_free(pShaderSpirv);
 	return pShader;
 }
@@ -182,6 +202,8 @@ typedef struct {
 	float fBarGap;
 	uint32_t BackgroundColor;
 	uint32_t BarColor;
+	float fMinimumBarHeight;
+	float fVerticalOffset;
 	bool bConnectedBars;
 
 	SDL_Window* pWindow;
@@ -194,29 +216,26 @@ typedef struct {
 
 void* RenderModern_Init(
 	SDL_Window* pWindow,
-	size_t WindowW,
-	size_t WindowH,
-	size_t nBar,
-	float fBarWidth,
-	float fBarGap,
-	uint32_t BackgroundColor,
-	uint32_t BarColor,
-	bool bConnectedBars
+	renderer_config* pConfig
 ) {
 	render_modern_state* pState = malloc(sizeof(*pState));
-	if (pState == NULL)
+	if (pState == NULL) {
+		fprintf(stderr, "Error: Unable to allocate render state\n");
 		goto CleanupEnd;
+	}
 
 	pState->pWindow = pWindow;
-	pState->WindowW = WindowW;
-	pState->WindowH = WindowH;
+	pState->WindowW = pConfig->WindowW;
+	pState->WindowH = pConfig->WindowH;
 
-	pState->nBar = nBar;
-	pState->fBarWidth = fBarWidth;
-	pState->fBarGap = fBarGap;
-	pState->BackgroundColor = BackgroundColor;
-	pState->BarColor = BarColor;
-	pState->bConnectedBars = bConnectedBars;
+	pState->nBar = pConfig->nBar;
+	pState->fBarWidth = pConfig->fBarWidth;
+	pState->fBarGap = pConfig->fBarGap;
+	pState->BackgroundColor = pConfig->BackgroundColor;
+	pState->BarColor = pConfig->BarColor;
+	pState->fMinimumBarHeight = pConfig->fMinimumBarHeight;
+	pState->fVerticalOffset = pConfig->fVerticalOffset;
+	pState->bConnectedBars = pConfig->bConnectedBars;
 
 	// GPU device
 
@@ -233,32 +252,55 @@ void* RenderModern_Init(
 	pState->pDevice = SDL_CreateGPUDeviceWithProperties(Props);
 	SDL_DestroyProperties(Props);
 
-	if (pState->pDevice == NULL)
+	if (pState->pDevice == NULL) {
+		fprintf(stderr, "Error: Unable to create GPU device: %s\n", SDL_GetError());
 		goto CleanupState;
+	}
 
-	if (!SDL_ClaimWindowForGPUDevice(pState->pDevice, pWindow))
+	if (!SDL_ClaimWindowForGPUDevice(pState->pDevice, pWindow)) {
+		fprintf(stderr, "Error: Unable to claim window for GPU device: %s\n", SDL_GetError());
 		goto CleanupGpuDevice;
+	}
 
-	SDL_GPUPresentMode PresentMode = SDL_GPU_PRESENTMODE_VSYNC;
-	if (SDL_WindowSupportsGPUPresentMode(pState->pDevice, pWindow, SDL_GPU_PRESENTMODE_MAILBOX))
-		PresentMode = SDL_GPU_PRESENTMODE_MAILBOX;
-	SDL_SetGPUSwapchainParameters(pState->pDevice, pWindow, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, PresentMode);
+	if (pConfig->bVsync) {
+		SDL_GPUPresentMode PresentMode = SDL_GPU_PRESENTMODE_VSYNC;
+		if (SDL_WindowSupportsGPUPresentMode(pState->pDevice, pWindow, SDL_GPU_PRESENTMODE_MAILBOX)) {
+			PresentMode = SDL_GPU_PRESENTMODE_MAILBOX;
+		}
+		SDL_SetGPUSwapchainParameters(
+			pState->pDevice,
+			pWindow,
+			SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+			PresentMode
+		);
+	} else {
+		SDL_SetGPUSwapchainParameters(
+			pState->pDevice,
+			pWindow,
+			SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+			SDL_GPU_PRESENTMODE_IMMEDIATE
+		);
+	}
 
 	SDL_SetGPUAllowedFramesInFlight(pState->pDevice, 1);
 
 	// Shaders
 
-	if (!SDL_ShaderCross_Init())
+	if (!SDL_ShaderCross_Init()) {
+		fprintf(stderr, "Error: Unable to initialize shader compiler: %s\n", SDL_GetError());
 		goto CleanupWindowBind;
+	}
 
 	SDL_GPUShader* pVertexShader = CompileShaderFromHlsl(
 		pState->pDevice,
-		bConnectedBars ? ConnectedVertexShaderString : VertexShaderString,
+		pState->bConnectedBars ? ConnectedVertexShaderString : VertexShaderString,
 		"VertexMain",
 		SDL_SHADERCROSS_SHADERSTAGE_VERTEX
 	);
-	if (pVertexShader == NULL)
+	if (pVertexShader == NULL) {
+		fprintf(stderr, "Error: Unable to compile vertex shader.\n");
 		goto CleanupShaderCross;
+	}
 
 	SDL_GPUShader* pFragmentShader = CompileShaderFromHlsl(
 		pState->pDevice,
@@ -266,8 +308,10 @@ void* RenderModern_Init(
 		"FragmentMain",
 		SDL_SHADERCROSS_SHADERSTAGE_FRAGMENT
 	);
-	if (pFragmentShader == NULL)
+	if (pFragmentShader == NULL) {
+		fprintf(stderr, "Error: Unable to compile fragment shader.\n");
 		goto CleanupVertexShader;
+	}
 
 	// Pipeline
 
@@ -283,7 +327,7 @@ void* RenderModern_Init(
 	};
 
 	SDL_GPUPrimitiveType PrimitiveType =
-		bConnectedBars ?
+		pState->bConnectedBars ?
 			SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP :
 			SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
 
@@ -306,20 +350,26 @@ void* RenderModern_Init(
 		pState->pDevice,
 		&PipelineInfo
 	);
-	if (pState->pPipeline == NULL)
+	if (pState->pPipeline == NULL) {
+		fprintf(stderr, "Error: Unable to create graphics pipeline: %s\n", SDL_GetError());
 		goto CleanupFragmentShader;
+	};
 
 	// Bar height buffer
 
+	size_t BufferSize = div_roundup(pState->nBar * sizeof(float), 16) * 16;
 	pState->pBarHeightBuffer = SDL_CreateGPUBuffer(
 		pState->pDevice,
 		&(SDL_GPUBufferCreateInfo){
 			.usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
-			.size = div_roundup(nBar * sizeof(float), 16) * 16,
+			.size = BufferSize,
 		}
 	);
-	if (pState->pBarHeightBuffer == NULL)
+	if (pState->pBarHeightBuffer == NULL) {
+		fprintf(stderr, "Error: Unable to create bar height buffer (size %zu): %s\n", 
+			BufferSize, SDL_GetError());
 		goto CleanupGraphicsPipeline;
+	}
 
 	// Transfer buffer
 
@@ -327,11 +377,14 @@ void* RenderModern_Init(
 		pState->pDevice,
 		&(SDL_GPUTransferBufferCreateInfo){
 			.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-			.size = div_roundup(nBar * sizeof(float), 16) * 16,
+			.size = BufferSize,
 		}
 	);
-	if (pState->pTransferBuffer == NULL)
+	if (pState->pTransferBuffer == NULL) {
+		fprintf(stderr, "Error: Unable to create transfer buffer (size %zu): %s\n", 
+			BufferSize, SDL_GetError());
 		goto CleanupBarHeightBuffer;
+	}
 
 	// Vertex buffer
 
@@ -342,8 +395,10 @@ void* RenderModern_Init(
 			.size = 16,
 		}
 	);
-	if (pState->pVertexBuffer == NULL)
+	if (pState->pVertexBuffer == NULL) {
+		fprintf(stderr, "Error: Unable to create vertex buffer: %s\n", SDL_GetError());
 		goto CleanupTransferBuffer;
+	}
 
 	// Success
 
@@ -483,11 +538,15 @@ void RenderModern_Render(void* pStateVoid, const float* aBarHeight) {
 
 		// Cbv parameter
 
+		float fWindowWInv = 1.0f / (float)pState->WindowW;
+		float fWindowHInv = 1.0f / (float)pState->WindowH;
 		if (pState->bConnectedBars) {
 			connected_cbv_parameter CbvParameter = {
 				{fBarColor[0], fBarColor[1], fBarColor[2], fBarColor[3]},
 				(uint32_t)pState->nBar,
-				1.0f / (float)TextureW
+				1.0f / (float)TextureW,
+				pState->fMinimumBarHeight * fWindowHInv,
+				pState->fVerticalOffset * fWindowHInv
 			};
 			SDL_PushGPUVertexUniformData(
 				pCommandBuffer,
@@ -498,8 +557,10 @@ void RenderModern_Render(void* pStateVoid, const float* aBarHeight) {
 		} else {
 			cbv_parameter CbvParameter = {
 				{fBarColor[0], fBarColor[1], fBarColor[2], fBarColor[3]},
-				pState->fBarWidth / (float)pState->WindowW,
-				pState->fBarGap / (float)pState->WindowW
+				pState->fBarWidth * fWindowWInv,
+				pState->fBarGap * fWindowWInv,
+				pState->fMinimumBarHeight * fWindowHInv,
+				pState->fVerticalOffset * fWindowHInv
 			};
 			SDL_PushGPUVertexUniformData(
 				pCommandBuffer,

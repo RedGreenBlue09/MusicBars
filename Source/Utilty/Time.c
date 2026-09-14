@@ -1,8 +1,8 @@
 
 #include <stdint.h>
 
-#include <Utilty/Machine.h>
-#include <Utilty/IntMath.h>
+#include "Utilty/Machine.h"
+#include "Utilty/IntMath.h"
 
 #if OS_WINDOWS
 #include <Windows.h>
