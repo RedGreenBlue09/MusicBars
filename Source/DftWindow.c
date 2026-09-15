@@ -106,7 +106,7 @@ static double HannPoissonMainLobe(double X) {
 	return exp(Sigmoid * Log + (1.0 - Sigmoid) * Para);
 }
 
-dft_window_info gaDftWindowInfo[] = {
+dft_window_info gaDftWindowInfo[DftWindowId_EnumCount] = {
 	{
 		1.0,
 		2.0,

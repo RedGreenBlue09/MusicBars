@@ -18,4 +18,4 @@ typedef struct {
 	double (*ComputeMainLobe)(double X);
 } dft_window_info;
 
-dft_window_info gaDftWindowInfo[];
+extern dft_window_info gaDftWindowInfo[DftWindowId_EnumCount];
