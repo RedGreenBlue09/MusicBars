@@ -186,8 +186,6 @@ void* AudioCapture_Init(
 			);
 			goto CleanupAudioContext;
 		}
-
-		ma_context_uninit(&AudioContext);
 	}
 
 	// Create and configure device
@@ -204,6 +202,8 @@ void* AudioCapture_Init(
 	MiniAudioConfig.noFixedSizedCallback = true;
 
 	MiniAudioResult = ma_device_init(NULL, &MiniAudioConfig, &pState->AudioDevice);
+	if (!bUseLoopback)
+		ma_context_uninit(&AudioContext);
 	if (MiniAudioResult != MA_SUCCESS) {
 		fprintf(stderr, "Unable to initialize audio device. Error code: %i\n", MiniAudioResult);
 		goto CleanupAudioQueue;
