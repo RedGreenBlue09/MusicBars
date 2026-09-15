@@ -29,7 +29,7 @@ static double RectangularMainLobe(double X) {
 // Parabolic
 
 static double Parabolic(double X) {
-	return -4.0 * X * X + 4.0 * X;
+	return -4.0 * (X * X) + 4.0 * X;
 }
 
 static double ParabolicMainLobe(double X) {
@@ -40,7 +40,7 @@ static double ParabolicMainLobe(double X) {
 // Sine
 
 static double Sine(double X) {
-	return -4.0 * X * X + 4.0 * X;
+	return sin(gfPi * X);
 }
 
 static double SineMainLobe(double X) {
@@ -103,7 +103,7 @@ static double HannPoissonMainLobe(double X) {
 	double LogFix = -X + (LogCoeff + LogCoeff * log(LogCoeff) - LogOffset);
 	Log = (X > LogCoeff) ? Log : LogFix;
 	double Para = -ParaCoeff * (X * X);
-	return Sigmoid * Log + (1.0 - Sigmoid) * Para;
+	return exp(Sigmoid * Log + (1.0 - Sigmoid) * Para);
 }
 
 dft_window_info gaDftWindowInfo[] = {

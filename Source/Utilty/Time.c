@@ -1,19 +1,15 @@
 
 #include <stdint.h>
 
+#include "Utilty/Atomic.h"
 #include "Utilty/Machine.h"
 #include "Utilty/IntMath.h"
 
 #if OS_WINDOWS
+
 #include <Windows.h>
-#elif OS_UNIX
-#include <time.h>
-#include <errno.h>
-#endif
 
-static uint64_t ClockRes = 0; // Fixme: Multi-thread
-
-#if OS_WINDOWS
+static atomic uint64_t gClockRes = 0;
 
 uint64_t clock64() {
 	LARGE_INTEGER TimeStruct;
@@ -22,35 +18,15 @@ uint64_t clock64() {
 }
 
 uint64_t clock64_resolution() {
+	uint64_t ClockRes = atomic_load_explicit(&gClockRes, memory_order_relaxed);
 	if (ClockRes == 0) {
 		LARGE_INTEGER TimeStruct;
 		QueryPerformanceFrequency(&TimeStruct);
 		ClockRes = TimeStruct.QuadPart;
+		atomic_store_explicit(&gClockRes, ClockRes, memory_order_relaxed);
 	}
 	return ClockRes;
 }
-
-#elif OS_UNIX
-
-uint64_t clock64() {
-	struct timespec TimeSpec;
-	clock_gettime(CLOCK_MONOTONIC, &TimeSpec);
-	return (uint64_t)TimeSpec.tv_sec * 1000000000 + (uint64_t)TimeSpec.tv_nsec;
-}
-
-uint64_t clock64_resolution() {
-	if (ClockRes == 0) {
-		struct timespec TimeSpec;
-		clock_getres(CLOCK_MONOTONIC, &TimeSpec);
-		ClockRes = (uint64_t)TimeSpec.tv_sec * 1000000000 + (uint64_t)TimeSpec.tv_nsec;
-	}
-	return ClockRes;
-}
-
-#endif
-
-
-#if OS_WINDOWS
 
 NTSYSAPI NTSTATUS NTAPI NtQueryTimerResolution(
 	OUT PULONG MinimumResolution,
@@ -58,7 +34,7 @@ NTSYSAPI NTSTATUS NTAPI NtQueryTimerResolution(
 	OUT PULONG CurrentResolution
 );
 
-static ULONG TimerResPeriod = 0;
+static atomic uint32_t gTimerResPeriod = 0;
 
 static void WaitableTimerSleep(int64_t Duration) {
 	if (Duration <= 0)
@@ -82,17 +58,15 @@ void sleep64(uint64_t Duration) {
 		return; // Avoid calculation overhead
 
 	uint64_t StartClockTime = clock64();
+	uint64_t ClockRes = clock64_resolution();
 
-	if (ClockRes == 0) {
-		LARGE_INTEGER li;
-		QueryPerformanceFrequency(&li);
-		ClockRes = li.QuadPart;
-	}
-
+	uint32_t TimerResPeriod =
+		atomic_load_explicit(&gTimerResPeriod, memory_order_relaxed);
 	if (TimerResPeriod == 0) {
 		ULONG Unused;
 		ULONG Unused2;
 		NtQueryTimerResolution(&TimerResPeriod, &Unused, &Unused2);
+		atomic_store_explicit(&gTimerResPeriod, TimerResPeriod, memory_order_relaxed);
 	}
 
 	int64_t TimerDuration;
@@ -114,6 +88,22 @@ void sleep64(uint64_t Duration) {
 
 #elif OS_UNIX
 
+#include <time.h>
+#include <errno.h>
+
+uint64_t clock64() {
+	struct timespec TimeSpec;
+	clock_gettime(CLOCK_MONOTONIC, &TimeSpec);
+	return (uint64_t)TimeSpec.tv_sec * 1000000000 + TimeSpec.tv_nsec;
+}
+
+uint64_t clock64_resolution() {
+	// If we use clock_getres() here and convert to CLOCKS_PER_SEC,
+	// it would add division overhead to clock64() and sleep64()
+	// and also precision loss, due to the design of the API.
+	return 1000000000;
+}
+
 // Implementation assumes nanosleep precision with busy-wait spinlock
 // for higher precision than nanosleep can provide.
 void sleep64(uint64_t Duration) {
@@ -122,16 +112,8 @@ void sleep64(uint64_t Duration) {
 
 	uint64_t StartClockTime = clock64();
 
-	if (ClockRes == 0) {
-		struct timespec TimeSpec;
-		clock_getres(CLOCK_MONOTONIC, &TimeSpec);
-		ClockRes = (uint64_t)TimeSpec.tv_sec * 1000000000 + (uint64_t)TimeSpec.tv_nsec;
-	}
-
-	uint64_t SleepDuration = Duration;
 	uint64_t Nanoseconds;
-	uint64_t Seconds = div_u64(SleepDuration, 1000000000, &Nanoseconds);
-
+	uint64_t Seconds = div_u64(Duration, 1000000000, &Nanoseconds);
 	struct timespec ReqTime = {
 		.tv_sec = Seconds,
 		.tv_nsec = Nanoseconds
@@ -139,7 +121,6 @@ void sleep64(uint64_t Duration) {
 
 	struct timespec RemTime;
 	int Result;
-
 	do {
 		Result = clock_nanosleep(CLOCK_MONOTONIC, 0, &ReqTime, &RemTime);
 		ReqTime = RemTime;

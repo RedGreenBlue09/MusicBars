@@ -78,31 +78,31 @@ typedef struct {
 // FIXME: The last column is empty
 static const char ConnectedVertexShaderString[] =
 	"struct vertex_output {"
-	"    float4 Position : SV_Position;"
-	"    float4 Color    : COLOR0;"
+	"	float4 Position : SV_Position;"
+	"	float4 Color	 : COLOR0;"
 	"};"
 	""
 	"StructuredBuffer<float4> aBarHeight : register(t0, space0);"
 	""
 	"cbuffer Params : register(b0, space1) {"
-	"    float4 BarColor;"
-	"    uint   nBar;"
-	"    float  ScreenWidthInv;"
+	"	float4 BarColor;"
+	"	uint	nBar;"
+	"	float	ScreenWidthInv;"
 	"	float MinimumBarHeight;"
 	"	float VerticalOffset;"
 	"};"
 	""
 	"float GetBarHeight(uint i) {"
-	"    return aBarHeight[i / 4][i % 4];"
+	"	return aBarHeight[i / 4][i % 4];"
 	"}"
 	""
 	"float HermiteEval(float Y0, float Y1, float M0, float M1, float T) {"
-	"    float T2 = T * T, T3 = T2 * T;"
-	"    float H00 = 2.0 * T3 + (-3.0 * T2 + 1.0);"
-	"    float H10 = T3 - 2.0 * T2 + T;"
-	"    float H01 = -2.0 * T3 + 3.0 * T2;"
-	"    float H11 = T3 - T2;"
-	"    return Y0 * H00 + M0 * H10 + Y1 * H01 + M1 * H11;"
+	"	float T2 = T * T, T3 = T2 * T;"
+	"	float H00 = 2.0 * T3 + (-3.0 * T2 + 1.0);"
+	"	float H10 = T3 - 2.0 * T2 + T;"
+	"	float H01 = -2.0 * T3 + 3.0 * T2;"
+	"	float H11 = T3 - T2;"
+	"	return Y0 * H00 + M0 * H10 + Y1 * H01 + M1 * H11;"
 	"}"
 	""
 	"float Tangent(uint i) {"
@@ -112,7 +112,7 @@ static const char ConnectedVertexShaderString[] =
 	"}"
 	""
 	"vertex_output VertexMain(uint VertexId : SV_VertexID) {"
-	"    uint Column = VertexId / 2;"
+	"	uint Column = VertexId / 2;"
 	"	float X = ScreenWidthInv * (float)Column;"
 	""
 	"	float fiBar = X * (float)(nBar - 1);"
@@ -130,19 +130,19 @@ static const char ConnectedVertexShaderString[] =
 	"	"
 	"	Y = (VertexId % 2 == 0) ? Y : 0.0;"
 	"	float2 Ndc = float2(X * 2.0 - 1.0, Y * 2.0 - 1.0);"
-	"    vertex_output Output = {float4(Ndc, 0.0, 1.0), BarColor};"
-	"    return Output;"
+	"	 vertex_output Output = {float4(Ndc, 0.0, 1.0), BarColor};"
+	"	 return Output;"
 	"}"
 	"";
 
 static const char FragmentShaderString[] =
 	"struct fragment_input {"
-	"    float4 Position : SV_Position;"
-	"    float4 Color    : COLOR0;"
+	"	float4 Position : SV_Position;"
+	"	float4 Color    : COLOR0;"
 	"};"
 	""
 	"float4 FragmentMain(fragment_input Input) : SV_Target0 {"
-	"    return Input.Color;"
+	"	return Input.Color;"
 	"}"
 	"";
 
@@ -366,8 +366,7 @@ void* RenderModern_Init(
 		}
 	);
 	if (pState->pBarHeightBuffer == NULL) {
-		fprintf(stderr, "Error: Unable to create bar height buffer (size %zu): %s\n", 
-			BufferSize, SDL_GetError());
+		fprintf(stderr, "Error: Unable to create bar height buffer: %s\n", SDL_GetError());
 		goto CleanupGraphicsPipeline;
 	}
 
@@ -381,8 +380,7 @@ void* RenderModern_Init(
 		}
 	);
 	if (pState->pTransferBuffer == NULL) {
-		fprintf(stderr, "Error: Unable to create transfer buffer (size %zu): %s\n", 
-			BufferSize, SDL_GetError());
+		fprintf(stderr, "Error: Unable to create transfer buffer: %s\n", SDL_GetError());
 		goto CleanupBarHeightBuffer;
 	}
 
@@ -457,8 +455,7 @@ void RenderModern_Render(void* pStateVoid, const float* aBarHeight) {
 	float* aBarHeightTemp =
 		(float*)SDL_MapGPUTransferBuffer(pState->pDevice, pState->pTransferBuffer, true);
 
-	for (size_t i = 0; i < pState->nBar; ++i)
-		aBarHeightTemp[i] = fmaxf(aBarHeight[i], 1.0f / (float)pState->WindowH);
+	memcpy(aBarHeightTemp, aBarHeight, array_size(aBarHeight, pState->nBar));
 	memset(&aBarHeightTemp[pState->nBar], BufferGpuSize - BufferSize, 0);
 
 	SDL_UnmapGPUTransferBuffer(pState->pDevice, pState->pTransferBuffer);
@@ -601,22 +598,10 @@ void RenderModern_Destroy(void* pStateVoid) {
 
 void* RenderModern_Init(
 	SDL_Window* pWindow,
-	size_t WindowW,
-	size_t WindowH,
-	size_t nBar,
-	float fBarWidth,
-	float fBarGap,
-	uint32_t BackgroundColor,
-	uint32_t BarColor
+	renderer_config* pConfig
 ) {
 	(void)pWindow;
-	(void)WindowW;
-	(void)WindowH;
-	(void)nBar;
-	(void)fBarWidth;
-	(void)fBarGap;
-	(void)BackgroundColor;
-	(void)BarColor;
+	(void)pConfig;
 	return NULL;
 }
 

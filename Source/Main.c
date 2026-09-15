@@ -83,9 +83,9 @@ int main(int argc, char** argv) {
 	const uint32_t BarColor = 0xFFFFFF7F;
 	const float fMinimumBarHeight = 1.0;
 	const float fVerticalOffset = 0.0;
-	const bool bConnectedBars = false;
+	const bool bConnectedBars = true;
 	const bool bAlwaysOnTop = true;
-	const bool bTransparentWindow = false;
+	const bool bTransparentWindow = true;
 	const bool bVsync = true;
 
 	// Create SDL window

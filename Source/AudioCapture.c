@@ -89,32 +89,22 @@ static void ReceiveAudio(ma_device* pDevice, void* pOutput, const void* pInput, 
 	}
 }
 
-// Find audio device by name
-// Returns pointer to device ID if found, NULL otherwise
-// sCaptureDevice == "(desktop)" is special:
-//   - On Windows: use loopback (returns NULL, handled separately)
-//   - On Linux: find "monitor" device
-// Otherwise: find exact name match
 static ma_device_id* FindAudioDeviceByName(
 	const char* sCaptureDevice,
 	ma_device_info* aCaptureInfo,
 	ma_uint32 nCapture
 ) {
-	if (strcmp(sCaptureDevice, "(desktop)") == 0) {
 #ifdef OS_LINUX
+	if (strcmp(sCaptureDevice, "(desktop)") == 0) {
 		for (ma_uint32 i = 0; i < nCapture; i++) {
 			if (strcasestr(aCaptureInfo[i].name, "monitor") != NULL) {
 				printf("Using audio capture device: %s\n", aCaptureInfo[i].name);
 				return &aCaptureInfo[i].id;
 			}
 		}
-		fprintf(stderr, "Warning: No monitor device found for (desktop).\n");
 		return NULL;
-#else
-		// On Windows, use loopback (handled separately, return NULL here)
-		return NULL;
-#endif
 	}
+#endif
 
 	for (ma_uint32 i = 0; i < nCapture; i++) {
 		if (strcmp(aCaptureInfo[i].name, sCaptureDevice) == 0) {
@@ -122,7 +112,6 @@ static ma_device_id* FindAudioDeviceByName(
 		}
 	}
 
-	fprintf(stderr, "Warning: Audio device '%s' not found. Using default device.\n", sCaptureDevice);
 	return NULL;
 }
 
@@ -187,8 +176,16 @@ void* AudioCapture_Init(
 			goto CleanupAudioContext;
 		}
 
-		// Find the requested audio device
 		pAudioDeviceId = FindAudioDeviceByName(sCaptureDevice, aCaptureInfo, nCapture);
+		if (pAudioDeviceId == NULL) {
+			fprintf(
+				stderr,
+				"Cannot find the audio device '%s'. Error code: %i\n",
+				sCaptureDevice,
+				MiniAudioResult
+			);
+			goto CleanupAudioContext;
+		}
 
 		ma_context_uninit(&AudioContext);
 	}

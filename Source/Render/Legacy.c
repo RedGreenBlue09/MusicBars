@@ -7,8 +7,8 @@
 
 #include <SDL3/SDL.h>
 
-#include "Utilty/Common.h"
 #include "Render/RendererCommon.h"
+#include "Utilty/Common.h"
 
 // SDL_Renderer-based
 
@@ -62,7 +62,7 @@ void* RenderLegacy_Init(
 	if (!pState->bConnectedBars) {
 		SDL_FRect* aRectangle = malloc(array_size(aRectangle, pState->nBar));
 		if (aRectangle == NULL) {
-			fprintf(stderr, "Error: Failed to allocate rectangle array\n");
+			fprintf(stderr, "Error: Failed to allocate rectangle array.\n");
 			SDL_DestroyRenderer(pRenderer);
 			free(pState);
 			return NULL;
@@ -92,6 +92,7 @@ void RenderLegacy_Render(void* pStateVoid, const float* aBarHeight) {
 	render_legacy_state* pState = (render_legacy_state*)pStateVoid;
 	size_t nBar = pState->nBar;
 
+	SDL_SetRenderDrawBlendMode(pState->pRenderer, SDL_BLENDMODE_NONE);
 	SDL_SetRenderDrawColor(
 		pState->pRenderer,
 		(uint8_t)(pState->BackgroundColor >> 24),
@@ -105,15 +106,17 @@ void RenderLegacy_Render(void* pStateVoid, const float* aBarHeight) {
 		(uint8_t)(pState->BarColor >> 24),
 		(uint8_t)(pState->BarColor >> 16),
 		(uint8_t)(pState->BarColor >> 8),
-		(uint8_t)(pState->BarColor >> 0) // FIXME: This alpha param isn't do anything
+		(uint8_t)(pState->BarColor >> 0)
 	);
+	// FIXME: It doesn't respect the alpha most of the times.
+	// Seem to be a SDL or DWM bug.
 
 	if (pState->bConnectedBars) {
 
 		float fWindowWInv = 1.0f / (float)pState->WindowW;
 		float fWindowHInv = 1.0f / (float)pState->WindowH;
 		for (size_t i = 0; i < pState->WindowW; ++i) {
-			
+
 			float fiBar = (float)i * fWindowWInv * (float)(nBar - 1);
 			size_t iBar = (size_t)fiBar;
 			float LocalDist = fiBar - floor(fiBar);
@@ -153,7 +156,6 @@ void RenderLegacy_Render(void* pStateVoid, const float* aBarHeight) {
 		SDL_RenderFillRects(pState->pRenderer, pState->aRectangle, (int)nBar);
 
 	}
-
 	SDL_RenderPresent(pState->pRenderer);
 }
 
