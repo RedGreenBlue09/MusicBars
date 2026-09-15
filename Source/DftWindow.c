@@ -9,9 +9,9 @@ static inline double SincPi(double X) {
 	return (X == 0.0) ? 1.0 : R;
 }
 static inline double CommonMainLobe(double X, double A, double B) {
-	if (abs(X) > (1.0 / A))
+	if (fabs(X) > (1.0 / A))
 		return 0.0;
-	return exp(-A * (X * X)) * abs(SincPi(B * X));
+	return exp(-A * (X * X)) * fabs(SincPi(B * X));
 }
 
 // Rectangular
@@ -21,9 +21,9 @@ static double Rectangular(double X) {
 }
 
 static double RectangularMainLobe(double X) {
-	if (abs(X) > 1.0)
+	if (fabs(X) > 1.0)
 		return 0.0;
-	return abs(SincPi(X));
+	return fabs(SincPi(X));
 }
 
 // Parabolic
@@ -97,7 +97,7 @@ static double HannPoissonMainLobe(double X) {
 	const double LogCoeff = 2.0;
 	const double LogOffset = 1.32;
 
-	X = abs(X);
+	X = fabs(X);
 	double Sigmoid = 1.0 / (1.0 + exp(-4.0 * (X - Intersect)));
 	double Log = -LogCoeff * log(X) - LogOffset;
 	double LogFix = -X + (LogCoeff + LogCoeff * log(LogCoeff) - LogOffset);
